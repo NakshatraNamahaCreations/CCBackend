@@ -1,10 +1,8 @@
-
-
 const Lead = require("../models/lead");
 const Query = require("../models/query");
 const Category = require("../models/category");
 const mongoose = require("mongoose");
-
+const moment = require("moment");
 // Function to generate a new unique lead ID (CC-Cust001, CC-Cust002, etc.)
 const generateLeadId = async () => {
   const lastLead = await Lead.findOne().sort({ _id: -1 }).limit(1); // Get the last created lead
@@ -81,18 +79,11 @@ exports.createOrUpdateLead = async (req, res) => {
 
     // Validate persons data
     for (const person of persons) {
-      if (!person.name || !person.phoneNo || !person.email) {
+      if (!person.name || !person.phoneNo) {
         return res
           .status(400)
           .json({ message: "Each person must have name, phoneNo, and email" });
       }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(person.email)) {
-        return res
-          .status(400)
-          .json({ message: `Invalid email format for ${person.email}` });
-      }
-   
     }
 
     // Check if any phone number already exists in the database
@@ -148,86 +139,6 @@ exports.createOrUpdateLead = async (req, res) => {
       .json({ message: "Error creating lead", error: err.message });
   }
 };
-
-// Route handler to add a query and new persons to an existing lead
-// exports.addQueryAndPerson = async (req, res) => {
-//   try {
-//     const { leadId } = req.params;
-//     const { persons, eventDetails } = req.body;
-
-//     // Validate input data
-//     if (!persons || !Array.isArray(persons) || persons.length === 0) {
-//       return res
-//         .status(400)
-//         .json({ message: "Persons array is required and cannot be empty" });
-//     }
-
-//     if (
-//       !eventDetails ||
-//       !Array.isArray(eventDetails) ||
-//       eventDetails.length === 0
-//     ) {
-//       return res.status(400).json({ message: "Event details are required" });
-//     }
-
-//     // Find the existing lead by _id
-//     const lead = await Lead.findById(leadId);
-//     if (!lead) {
-//       return res.status(404).json({ message: "Lead not found" });
-//     }
-
-//     // Check for duplicate phone numbers in existing persons
-//     const existingPhoneNumbers = lead.persons.map((p) => p.phoneNo);
-//     const newPhoneNumbers = persons.map((p) => p.phoneNo);
-//     const duplicatePhone = newPhoneNumbers.find((phone) =>
-//       existingPhoneNumbers.includes(phone)
-//     );
-//     if (duplicatePhone) {
-//       return res.status(400).json({
-//         message: `${duplicatePhone} is already registered with this lead.`,
-//       });
-//     }
-
-//     // Generate a new queryId
-//     const queryId = await generateQueryId(); // Ensure this function is defined and imported
-
-//     // Create a new query document
-//     const query = new Query({
-//       queryId, // Assign the generated queryId
-//       eventDetails: eventDetails.map((event) => ({
-//         category: event.category,
-//         eventStartDate: new Date(event.eventStartDate),
-//         eventEndDate: new Date(event.eventEndDate),
-//       })),
-//       status: "Created", // ✅ set status here
-//     });
-//     await query.save();
-
-//     // Add new persons to the lead
-//     lead.persons.push(...persons);
-
-//     // Add the new query to the lead's queries array
-//     lead.queries.push(query._id);
-
-//     // Save the updated lead
-//     await lead.save();
-
-//     // Populate the lead with query details for the response
-//     const populatedLead = await Lead.findById(lead._id)
-//       .populate("queries")
-//       .lean();
-
-//     return res.status(200).json({
-//       message: "Query and persons added successfully",
-//       lead: populatedLead,
-//     });
-//   } catch (err) {
-//     console.error("Error adding query and persons:", err);
-//     res
-//       .status(500)
-//       .json({ message: "Error adding query and persons", error: err.message });
-//   }
-// };
 
 exports.addQueryAndPerson = async (req, res) => {
   try {
@@ -312,12 +223,11 @@ exports.addQueryAndPerson = async (req, res) => {
   }
 };
 
-
 // Fetch All Leads
 exports.getAllLeads = async (req, res) => {
   try {
     const page = parseInt(req.query.page);
-    const limit = parseInt(req.query.limit) ;
+    const limit = parseInt(req.query.limit);
     const search = req.query.search || "";
 
     const skip = (page - 1) * limit;
@@ -328,7 +238,7 @@ exports.getAllLeads = async (req, res) => {
           $or: [
             { "persons.name": { $regex: search, $options: "i" } },
             { "persons.phoneNo": { $regex: search, $options: "i" } },
-            { "leadId": { $regex: search, $options: "i" } },
+            { leadId: { $regex: search, $options: "i" } },
           ],
         }
       : {};
@@ -357,14 +267,113 @@ exports.getAllLeads = async (req, res) => {
 };
 
 // GET /api/lead/paginated?page=1&limit=10&search=...
+// exports.getAllQueriesPaginated = async (req, res) => {
+//   try {
+//     const page = parseInt(req.query.page);
+//     const limit = parseInt(req.query.limit);
+//     const search = req.query.search || "";
+//     const skip = (page - 1) * limit;
+
+//     const searchRegex = new RegExp(search, "i");
+
+//     // Aggregate pipeline
+//     const pipeline = [
+//       { $unwind: "$queries" },
+//       {
+//         $lookup: {
+//           from: "queries",
+//           localField: "queries",
+//           foreignField: "_id",
+//           as: "query",
+//         },
+//       },
+//       { $unwind: "$query" },
+//       // Move $match here so it works on the correct fields
+//       ...(search
+//         ? [
+//             {
+//               $match: {
+//                 $or: [
+//                   { "persons.name": { $regex: searchRegex } },
+//                   { "persons.phoneNo": { $regex: searchRegex } },
+//                   { "query.queryId": { $regex: searchRegex } },
+//                 ],
+//               },
+//             },
+//           ]
+//         : []),
+//       {
+//         $project: {
+//           leadId: "$_id",
+//           leadName: { $arrayElemAt: ["$persons.name", 0] },
+//           leadPhone: { $arrayElemAt: ["$persons.phoneNo", 0] },
+//           query: 1,
+//         },
+//       },
+//       { $sort: { "query.createdAt": -1 } },
+//       { $skip: skip },
+//       { $limit: limit },
+//     ];
+
+//     // For total count
+//     const countPipeline = pipeline
+//       .filter((stage) => !("$skip" in stage) && !("$limit" in stage))
+//       .concat([{ $count: "total" }]);
+
+//     const [results, totalResult] = await Promise.all([
+//       Lead.aggregate(pipeline),
+//       Lead.aggregate(countPipeline),
+//     ]);
+//     const total = totalResult[0]?.total || 0;
+
+//     res.status(200).json({
+//       success: true,
+//       data: results,
+//       currentPage: page,
+//       totalPages: Math.ceil(total / limit),
+//       totalCount: total,
+//     });
+//   } catch (err) {
+//     console.error("Error fetching queries:", err);
+//     res
+//       .status(500)
+//       .json({ message: "Error fetching queries", error: err.message });
+//   }
+// };
+
+// GET /api/lead/paginated?page=1&limit=10&search=&status=&eventCategory=
 exports.getAllQueriesPaginated = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page);
+    const limit = parseInt(req.query.limit);
     const search = req.query.search || "";
+    const status = req.query.status || "";
+    const eventCategory = req.query.eventCategory || "";
     const skip = (page - 1) * limit;
 
     const searchRegex = new RegExp(search, "i");
+
+    // Common match filters
+    const matchConditions = [];
+    if (search) {
+      matchConditions.push({
+        $or: [
+          { "persons.name": { $regex: searchRegex } },
+          { "persons.phoneNo": { $regex: searchRegex } },
+          { "query.queryId": { $regex: searchRegex } },
+        ],
+      });
+    }
+    if (status) {
+      matchConditions.push({
+        "query.status": { $regex: status, $options: "i" },
+      });
+    }
+    if (eventCategory) {
+      matchConditions.push({
+        "query.eventDetails.category": { $regex: eventCategory, $options: "i" },
+      });
+    }
 
     // Aggregate pipeline
     const pipeline = [
@@ -374,42 +383,38 @@ exports.getAllQueriesPaginated = async (req, res) => {
           from: "queries",
           localField: "queries",
           foreignField: "_id",
-          as: "query"
-        }
+          as: "query",
+        },
       },
       { $unwind: "$query" },
-      // Move $match here so it works on the correct fields
-      ...(search
-        ? [{
-            $match: {
-              $or: [
-                { "persons.name": { $regex: searchRegex } },
-                { "persons.phoneNo": { $regex: searchRegex } },
-                { "query.queryId": { $regex: searchRegex } }
-              ]
-            }
-          }]
+
+      ...(matchConditions.length > 0
+        ? [{ $match: { $and: matchConditions } }]
         : []),
+
       {
         $project: {
           leadId: "$_id",
           leadName: { $arrayElemAt: ["$persons.name", 0] },
           leadPhone: { $arrayElemAt: ["$persons.phoneNo", 0] },
-          query: 1
-        }
+          query: 1,
+        },
       },
       { $sort: { "query.createdAt": -1 } },
       { $skip: skip },
-      { $limit: limit }
+      { $limit: limit },
     ];
 
-    // For total count
-    const countPipeline = pipeline.filter(stage => !("$skip" in stage) && !("$limit" in stage)).concat([{ $count: "total" }]);
+    // For total count (without skip/limit)
+    const countPipeline = pipeline
+      .filter((stage) => !("$skip" in stage) && !("$limit" in stage))
+      .concat([{ $count: "total" }]);
 
     const [results, totalResult] = await Promise.all([
       Lead.aggregate(pipeline),
-      Lead.aggregate(countPipeline)
+      Lead.aggregate(countPipeline),
     ]);
+
     const total = totalResult[0]?.total || 0;
 
     res.status(200).json({
@@ -421,10 +426,11 @@ exports.getAllQueriesPaginated = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching queries:", err);
-    res.status(500).json({ message: "Error fetching queries", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error fetching queries", error: err.message });
   }
 };
-
 
 // Search Lead by Phone Number
 exports.searchLeadByPhoneNo = async (req, res) => {
@@ -582,13 +588,24 @@ exports.updateLeadQueryDetails = async (req, res) => {
 };
 
 // Update Query Status by ID
+// Update Query Status by ID
 exports.updateQueryStatus = async (req, res) => {
   try {
-    const { status, comment } = req.body;
+    const { status, comment, callRescheduledDate } = req.body;
     const updateFields = { status };
 
-    if (status === "Call Later" && comment !== undefined) {
+    // If status is "Call Later", ensure comment and callRescheduledDate are included
+    if (
+      status === "Call Later" &&
+      comment !== "" &&
+      callRescheduledDate !== ""
+    ) {
       updateFields.comment = comment;
+      updateFields.callRescheduledDate = callRescheduledDate;
+    } else {
+      // If status is not "Call Later", reset comment and callRescheduledDate
+      updateFields.comment = "";
+      updateFields.callRescheduledDate = "";
     }
 
     const query = await Query.findByIdAndUpdate(
@@ -606,4 +623,117 @@ exports.updateQueryStatus = async (req, res) => {
   }
 };
 
+exports.getCreatedQueriesCount = async (req, res) => {
+  try {
+    const { status } = req.query;
+    // Use countDocuments to get the number of matching documents
+    const count = await Query.countDocuments({ status: status });
 
+    // Send the count as a JSON response
+    res.status(200).json({
+      success: true,
+      count: count,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error: Could not retrieve query count",
+      error: error.message,
+    });
+  }
+};
+
+exports.getQueryWithStatus = async (req, res) => {
+  try {
+    const { status } = req.params; // Retrieve 'status' from the query parameters
+
+    if (!status) {
+      return res.status(400).json({ message: "Status is required" });
+    }
+
+    // Fetch queries based on the status
+    const queries = await Query.find({
+      status: { $regex: status, $options: "i" },
+    })
+      .sort({ createdAt: -1 }) // Optional: Sort by creation date (newest first)
+      .lean();
+
+    // Check if any queries were found
+    if (!queries || queries.length === 0) {
+      return res
+        .status(404)
+        .json({ message: `No queries found with status: ${status}` });
+    }
+
+    // Return the queries
+    res
+      .status(200)
+      .json({ success: true, data: queries, count: queries.length });
+  } catch (err) {
+    console.error("Error fetching queries by status:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// Fetch queries with status "Call Later" and matching event date
+exports.getCallLaterQueriesbyDate = async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    // Validate date
+    if (!date) {
+      return res.status(400).json({ message: "Date parameter is required" });
+    }
+
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate)) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    const startOfDay = new Date(parsedDate.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(parsedDate.setHours(23, 59, 59, 999));
+
+    // Find leads whose queries contain callRescheduledDate within the day
+    const leads = await Lead.find({
+      queries: { $exists: true, $ne: [] }, // Ensure there are queries
+    }).populate({
+      path: "queries",
+      match: {
+        callRescheduledDate: { $gte: startOfDay, $lt: endOfDay },
+      },
+      select: "queryId status comment callRescheduledDate eventDetails", // Only fields you need
+    });
+
+    // Flatten the results: only keep queries that matched
+    const result = [];
+
+    leads.forEach((lead) => {
+      if (lead.queries && lead.queries.length > 0) {
+        lead.queries.forEach((query) => {
+          result.push({
+            _id: query._id,
+            queryId: query.queryId,
+            status: query.status,
+            comment: query.comment,
+            callRescheduledDate: query.callRescheduledDate,
+            eventDetails: query.eventDetails,
+            leadId: lead.leadId,
+            persons: lead.persons,
+          });
+        });
+      }
+    });
+
+    if (result.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No queries found for this date" });
+    }
+
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    console.error("Error fetching queries:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};

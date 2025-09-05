@@ -21,7 +21,6 @@
 
 // module.exports = Query;
 
-
 const mongoose = require("mongoose");
 
 const querySchema = new mongoose.Schema(
@@ -35,7 +34,8 @@ const querySchema = new mongoose.Schema(
       },
     ],
     status: { type: String },
-    comment: { type: String }, // ✅ new field added
+    comment: { type: String },
+    callRescheduledDate: { type: Date }, // ✅ new field added
   },
   { timestamps: true }
 );

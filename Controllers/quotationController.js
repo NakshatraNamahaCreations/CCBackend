@@ -1,10 +1,10 @@
 const Quotation = require("../models/quotation.model");
-const Vendor = require("../models/vendor.model")
-const Query = require("../models/query"); 
-const mongoose = require("mongoose")
-
+const Vendor = require("../models/vendor.model");
+const Query = require("../models/query");
+const mongoose = require("mongoose");
+const dayjs = require("dayjs");
 const moment = require("moment");
-
+const VendorInventory = require("../models/vendorInventory")
 // Generate next quotationId like "QN0001"
 async function generateQuotationId() {
   const latestQuotation = await Quotation.findOne({})
@@ -34,39 +34,61 @@ async function generateInvoiceNumber() {
   return "INV" + nextNum.toString().padStart(4, "0");
 }
 
-// POST /api/quotations/create
 exports.createQuotation = async (req, res) => {
   try {
+    console.log("Request body:", JSON.stringify(req.body, null, 2)); // Debug log
+
     const {
       leadId,
       queryId,
-      quoteTitle,
-      quoteDescription,
-      packages,
-      installments,
-      totalAmount,
-      discountPercent,
-      discountValue,
-      gstApplied,
-      gstValue,
-      marginAmount,
-      finalized,
+      quoteTitle = "",
+      quoteDescription = "",
+      packages = [],
+      installments = [],
+      totalAmount = 0,
+      discountPercent = 0,
+      discountValue = 0,
+      gstApplied = false,
+      gstValue = 0,
+      marginAmount = 0,
+      totalPackageAmt = 0,
+      totalAlbumAmount = 0,
+      finalized = false,
+      albums = [],
     } = req.body;
 
-    const quotationId = await generateQuotationId();
+    // Validate required fields
+    if (!leadId || !queryId) {
+      return res.status(400).json({
+        success: false,
+        message: "leadId and queryId are required",
+      });
+    }
 
-    // Set default status for installments
-    const processedInstallments = (installments || []).map((inst, idx) => ({
+    let quotationId;
+    try {
+      quotationId = await generateQuotationId();
+    } catch (err) {
+      console.error("Failed to generate quotation ID:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate quotation ID",
+      });
+    }
+
+    // Process installments with defaults
+    const processedInstallments = installments.map((inst, idx) => ({
       ...inst,
-      status: inst.status || 'Pending',
+      status: inst.status || "Pending",
       installmentNumber: inst.installmentNumber || idx + 1,
+      amountPaid: inst.amountPaid || 0,
     }));
 
-    // Set bookingStatus if first installment is completed
-    let bookingStatus = 'NotBooked';
-    if (processedInstallments.length > 0 && processedInstallments[0].status === 'Completed') {
-      bookingStatus = 'Booked';
-    }
+    const bookingStatus = processedInstallments.some(
+      (i) => i.status === "Completed"
+    )
+      ? "Booked"
+      : "NotBooked";
 
     const newQuotation = new Quotation({
       leadId,
@@ -82,8 +104,12 @@ exports.createQuotation = async (req, res) => {
       gstApplied,
       gstValue,
       marginAmount,
-      finalized: finalized || false,
+      finalized,
       bookingStatus,
+      totalPackageAmt,
+      totalAlbumAmount,
+      albums,
+      // albums will default to [] automatically
     });
 
     const savedQuotation = await newQuotation.save();
@@ -98,6 +124,86 @@ exports.createQuotation = async (req, res) => {
       success: false,
       message: "Failed to create quotation",
       error: error.message,
+      stack: error.stack, // Include stack trace for debugging
+    });
+  }
+};
+
+// PUT /api/quotations/:id
+exports.updateQuotation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Quotation _id is required" });
+    }
+    const {
+      leadId,
+      queryId,
+      quoteTitle,
+      quoteDescription,
+      packages,
+      installments,
+      totalAmount,
+      discountPercent,
+      discountValue,
+      gstApplied,
+      gstValue,
+      marginAmount,
+      finalized,
+      totalPackageAmt,
+      totalAlbumAmount,
+      albums,
+    } = req.body;
+
+    const quotation = await Quotation.findById(id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found for this _id" });
+    }
+
+    // Update fields (only if provided)
+    if (leadId !== undefined) quotation.leadId = leadId;
+    if (queryId !== undefined) quotation.queryId = queryId;
+    if (quoteTitle !== undefined) quotation.quoteTitle = quoteTitle;
+    if (quoteDescription !== undefined)
+      quotation.quoteDescription = quoteDescription;
+    if (packages !== undefined) quotation.packages = packages;
+    if (installments !== undefined) quotation.installments = installments;
+    if (totalAmount !== undefined) quotation.totalAmount = totalAmount;
+    if (discountPercent !== undefined)
+      quotation.discountPercent = discountPercent;
+    if (discountValue !== undefined) quotation.discountValue = discountValue;
+    if (gstApplied !== undefined) quotation.gstApplied = gstApplied;
+    if (gstValue !== undefined) quotation.gstValue = gstValue;
+    if (marginAmount !== undefined) quotation.marginAmount = marginAmount;
+    if (finalized !== undefined) quotation.finalized = finalized;
+    if (totalPackageAmt !== undefined)
+      quotation.totalPackageAmt = totalPackageAmt;
+    if (totalAlbumAmount !== undefined)
+      quotation.totalAlbumAmount = totalAlbumAmount;
+    if (albums !== undefined) {
+      quotation.albums = albums; // replace whole array
+      quotation.markModified("albums"); // ensure nested Map fields persist
+    }
+
+    const updatedQuotation = await quotation.save();
+    await updatedQuotation.populate("packages");
+    await updatedQuotation.populate("installments");
+
+    return res.status(200).json({
+      success: true,
+      message: "Quotation updated successfully",
+      quotation: updatedQuotation,
+    });
+  } catch (error) {
+    console.error("Error updating quotation:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update quotation",
+      error: error.message,
     });
   }
 };
@@ -107,30 +213,36 @@ exports.getQuotationByQueryId = async (req, res) => {
   try {
     const { queryId } = req.params;
     if (!queryId) {
-      return res.status(400).json({ success: false, message: 'queryId is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "queryId is required" });
     }
     // No populate needed, just return the full embedded data
     const quotations = await Quotation.find({ queryId }).lean();
     if (!quotations || quotations.length === 0) {
-      return res.status(404).json({ success: false, message: 'No quotations found for this queryId' });
+      return res.status(404).json({
+        success: false,
+        message: "No quotations found for this queryId",
+      });
     }
     return res.status(200).json({ success: true, quotations });
   } catch (error) {
-    console.error('Error fetching quotations by queryId:', error);
-    return res.status(500).json({ success: false, message: 'Failed to fetch quotations', error: error.message });
+    console.error("Error fetching quotations by queryId:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch quotations",
+      error: error.message,
+    });
   }
 };
-
-
 
 // GET /api/quotations/finalized
 exports.getFinalizedQuotationsPaginated = async (req, res) => {
   try {
-    
-    const { page, limit , search = "" } = req.query;
-    console.log("page", page)
-    console.log("limit", limit)
-    console.log("search", search)
+    const { page, limit, search = "" } = req.query;
+    console.log("page", page);
+    console.log("limit", limit);
+    console.log("search", search);
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const searchRegex = new RegExp(search, "i");
 
@@ -166,105 +278,61 @@ exports.getFinalizedQuotationsPaginated = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching paginated finalized quotations:", error);
-    return res.status(500).json({ success: false, message: "Failed to fetch finalized quotations", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch finalized quotations",
+      error: error.message,
+    });
   }
 };
-
 
 // GET /api/quotations/:id
 exports.getQuotationById = async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
-      return res.status(400).json({ success: false, message: 'Quotation _id is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Quotation _id is required" });
     }
 
-    const quotation = await Quotation.findById(id)
-      .populate("leadId") // ✅ Populate lead data
-       // Optional: populate query if needed
+    const quotation = await Quotation.findById(id).populate("leadId"); // ✅ Populate lead data
+    // Optional: populate query if needed
 
     if (!quotation) {
-      return res.status(404).json({ success: false, message: 'Quotation not found for this _id' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found for this _id" });
     }
 
     return res.status(200).json({ success: true, quotation });
   } catch (error) {
-    console.error('Error fetching quotation by _id:', error);
-    return res.status(500).json({ success: false, message: 'Failed to fetch quotation', error: error.message });
-  }
-};
-
-// PUT /api/quotations/:id
-exports.updateQuotation = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'Quotation _id is required' });
-    }
-    const {
-      leadId,
-      queryId,
-      quoteTitle,
-      quoteDescription,
-      packages,
-      installments,
-      totalAmount,
-      discountPercent,
-      discountValue,
-      gstApplied,
-      gstValue,
-      marginAmount,
-      finalized,
-    } = req.body;
-
-    const quotation = await Quotation.findById(id);
-    if (!quotation) {
-      return res.status(404).json({ success: false, message: 'Quotation not found for this _id' });
-    }
-
-    // Update fields (only if provided)
-    if (leadId !== undefined) quotation.leadId = leadId;
-    if (queryId !== undefined) quotation.queryId = queryId;
-    if (quoteTitle !== undefined) quotation.quoteTitle = quoteTitle;
-    if (quoteDescription !== undefined) quotation.quoteDescription = quoteDescription;
-    if (packages !== undefined) quotation.packages = packages;
-    if (installments !== undefined) quotation.installments = installments;
-    if (totalAmount !== undefined) quotation.totalAmount = totalAmount;
-    if (discountPercent !== undefined) quotation.discountPercent = discountPercent;
-    if (discountValue !== undefined) quotation.discountValue = discountValue;
-    if (gstApplied !== undefined) quotation.gstApplied = gstApplied;
-    if (gstValue !== undefined) quotation.gstValue = gstValue;
-    if (marginAmount !== undefined) quotation.marginAmount = marginAmount;
-    if (finalized !== undefined) quotation.finalized = finalized;
-
-    const updatedQuotation = await quotation.save();
-    await updatedQuotation.populate('packages');
-    await updatedQuotation.populate('installments');
-
-    return res.status(200).json({
-      success: true,
-      message: 'Quotation updated successfully',
-      quotation: updatedQuotation,
+    console.error("Error fetching quotation by _id:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch quotation",
+      error: error.message,
     });
-  } catch (error) {
-    console.error('Error updating quotation:', error);
-    return res.status(500).json({ success: false, message: 'Failed to update quotation', error: error.message });
   }
 };
-
 
 // PATCH /api/quotations/:id/finalize
 exports.toggleFinalizedQuotation = async (req, res) => {
   try {
     const { id } = req.params;
     const { finalized } = req.body;
-    if (typeof finalized !== 'boolean') {
-      return res.status(400).json({ success: false, message: 'finalized (boolean) is required in body' });
+    if (typeof finalized !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "finalized (boolean) is required in body",
+      });
     }
     // Find the target quotation
     const quotation = await Quotation.findById(id);
     if (!quotation) {
-      return res.status(404).json({ success: false, message: 'Quotation not found for this _id' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found for this _id" });
     }
 
     if (finalized) {
@@ -282,17 +350,24 @@ exports.toggleFinalizedQuotation = async (req, res) => {
     await quotation.save();
 
     // Double-check: count finalized quotations for this queryId
-    const finalizedCount = await Quotation.countDocuments({ queryId: quotation.queryId, finalized: true });
+    const finalizedCount = await Quotation.countDocuments({
+      queryId: quotation.queryId,
+      finalized: true,
+    });
 
     return res.status(200).json({
       success: true,
       message: `Quotation finalized status set to ${finalized}`,
       quotation,
-      finalizedCountForQuery: finalizedCount
+      finalizedCountForQuery: finalizedCount,
     });
   } catch (error) {
-    console.error('Error toggling finalized status:', error);
-    return res.status(500).json({ success: false, message: 'Failed to update finalized status', error: error.message });
+    console.error("Error toggling finalized status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update finalized status",
+      error: error.message,
+    });
   }
 };
 
@@ -300,60 +375,183 @@ exports.toggleFinalizedQuotation = async (req, res) => {
 exports.updateInstallmentStatus = async (req, res) => {
   try {
     const { quotationId, installmentId } = req.params;
-    const { dueDate, paymentMode, paymentPercentage, paymentAmount } = req.body;
+    const { dueDate, paymentMode, paymentPercentage, paymentAmount, status } =
+      req.body;
 
     const quotation = await Quotation.findById(quotationId);
     if (!quotation) {
-      return res.status(404).json({ success: false, message: 'Quotation not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
     }
 
-    // 🔁 UPDATE existing installment
-    if (installmentId !== 'new') {
-      const installment = quotation.installments.find(inst => String(inst._id) === String(installmentId));
+    if (installmentId !== "new") {
+      const installment = quotation.installments.find(
+        (inst) => String(inst._id) === String(installmentId)
+      );
       if (!installment) {
-        return res.status(404).json({ success: false, message: 'Installment not found' });
+        return res
+          .status(404)
+          .json({ success: false, message: "Installment not found" });
       }
 
+      // Update fields from request
       if (dueDate !== undefined) installment.dueDate = dueDate;
       if (paymentMode !== undefined) installment.paymentMode = paymentMode;
-      if (paymentPercentage !== undefined) installment.paymentPercentage = paymentPercentage;
-      if (paymentAmount !== undefined) installment.paymentAmount = paymentAmount;
+      if (paymentPercentage !== undefined)
+        installment.paymentPercentage = paymentPercentage;
+      if (status !== undefined) installment.status = status;
 
-      installment.status = (installment.dueDate && installment.paymentMode) ? 'Completed' : 'Pending';
+      if (paymentAmount !== undefined) {
+        installment.paymentAmount = paymentAmount;
+        // Update paid/pending amounts based on the status from frontend
+        if (status === "Completed") {
+          installment.paidAmount = paymentAmount;
+          installment.pendingAmount = 0;
+        } else if (status === "Partial Paid") {
+          // For partial payments, maintain existing paidAmount or set to paymentAmount
+          installment.paidAmount = installment.paidAmount || paymentAmount;
+          installment.pendingAmount = paymentAmount - installment.paidAmount;
+        } else {
+          // Pending status
+          installment.paidAmount = 0;
+          installment.pendingAmount = paymentAmount;
+        }
+      }
 
-      // If first installment is completed, mark quotation as booked
+      // business rule for first installment
       const firstInstallment = quotation.installments[0];
       if (
         firstInstallment &&
         String(firstInstallment._id) === String(installmentId) &&
-        installment.status === 'Completed'
+        installment.status === "Completed"
       ) {
-        quotation.bookingStatus = 'Booked';
+        quotation.bookingStatus = "Booked";
         if (quotation.queryId) {
           await Query.findOneAndUpdate(
             { _id: quotation.queryId },
-            { status: 'Booked' }
+            { status: "Booked" }
           );
         }
       }
-    } 
-    // 🆕 CREATE new installment
-    else {
+    } else {
+      // For new installment, use status from frontend or default to Pending
+      const newStatus = status || "Pending";
+      const planned = paymentAmount ?? 0;
+
       quotation.installments.push({
         dueDate,
         paymentMode,
         paymentPercentage,
-        paymentAmount,
-        status: (dueDate && paymentMode) ? 'Completed' : 'Pending'
+        paymentAmount: planned,
+        paidAmount: newStatus === "Completed" ? planned : 0,
+        pendingAmount: newStatus === "Completed" ? 0 : planned,
+        status: newStatus,
       });
     }
 
     await quotation.save();
     return res.status(200).json({ success: true, quotation });
-
   } catch (error) {
-    console.error('Error updating/creating installment:', error);
-    return res.status(500).json({ success: false, message: 'Failed to update/create installment', error: error.message });
+    console.error("Error updating/creating installment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update/create installment",
+      error: error.message,
+    });
+  }
+};
+
+exports.updateInstallmentFirstPayment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { quotationId, installmentId } = req.params;
+    const { dueDate, paymentMode, paymentAmount, status } = req.body;
+
+    const allowed = ["Pending", "Partial Paid", "Completed"];
+    if (status && !allowed.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Allowed: ${allowed.join(", ")}`,
+      });
+    }
+
+    const filter = mongoose.isValidObjectId(quotationId)
+      ? { _id: quotationId }
+      : { quotationId };
+
+    // Load quotation in the session
+    const doc = await Quotation.findOne(filter).session(session);
+    if (!doc) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    const inst = doc.installments.id(installmentId);
+    if (!inst) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Installment not found" });
+    }
+
+    // --- Update the targeted installment ---
+    if (dueDate !== undefined) inst.dueDate = dueDate;
+    if (paymentMode !== undefined) inst.paymentMode = paymentMode;
+    if (status !== undefined) inst.status = status;
+
+    const paidNow = Number(paymentAmount ?? inst.paymentAmount ?? 0);
+    inst.paidAmount = paidNow;
+    inst.pendingAmount = 0; // this one is paid
+
+    // --- Other installments: pending = their planned amount (leave paid/status as-is) ---
+    doc.installments.forEach((i) => {
+      if (i._id.toString() !== installmentId) {
+        i.pendingAmount = Number(i.paymentAmount ?? 0);
+      }
+    });
+
+    // --- NEW: mark booking as Booked (unless already Completed) ---
+    if (doc.bookingStatus !== "Completed") {
+      doc.bookingStatus = "Booked";
+    }
+
+    await doc.save({ session });
+
+    // --- NEW: also mark the related Query's status as Booked ---
+    if (doc.queryId) {
+      await Query.findByIdAndUpdate(
+        doc.queryId,
+        { $set: { status: "Booked" } },
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      success: true,
+      message:
+        "First payment recorded; booking & query marked as Booked; other installments pending set to their paymentAmount.",
+      data: {
+        quotationId: doc._id,
+        updatedInstallment: doc.installments.id(installmentId),
+        installments: doc.installments,
+        bookingStatus: doc.bookingStatus,
+      },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("updateInstallmentFirstPayment error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to record first payment",
+      error: err.message,
+    });
   }
 };
 
@@ -363,7 +561,9 @@ exports.deleteInstallment = async (req, res) => {
 
     const quotation = await Quotation.findById(quotationId);
     if (!quotation) {
-      return res.status(404).json({ success: false, message: 'Quotation not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
     }
 
     const installmentIndex = quotation.installments.findIndex(
@@ -371,12 +571,18 @@ exports.deleteInstallment = async (req, res) => {
     );
 
     if (installmentIndex === -1) {
-      return res.status(404).json({ success: false, message: 'Installment not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Installment not found" });
     }
 
-    const isCompleted = quotation.installments[installmentIndex].status === "Completed";
+    const isCompleted =
+      quotation.installments[installmentIndex].status === "Completed";
     if (isCompleted) {
-      return res.status(400).json({ success: false, message: 'Cannot delete a completed installment' });
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete a completed installment",
+      });
     }
 
     quotation.installments.splice(installmentIndex, 1);
@@ -388,10 +594,13 @@ exports.deleteInstallment = async (req, res) => {
 
     await quotation.save();
     return res.status(200).json({ success: true, quotation });
-
   } catch (error) {
     console.error("Error deleting installment:", error);
-    return res.status(500).json({ success: false, message: "Failed to delete installment", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete installment",
+      error: error.message,
+    });
   }
 };
 
@@ -401,10 +610,14 @@ exports.generateInvoiceNumber = async (req, res) => {
     const { id } = req.params;
     const quotation = await Quotation.findById(id);
     if (!quotation) {
-      return res.status(404).json({ success: false, message: "Quotation not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
     }
     if (quotation.invoiceNumber) {
-      return res.status(200).json({ success: true, invoiceNumber: quotation.invoiceNumber });
+      return res
+        .status(200)
+        .json({ success: true, invoiceNumber: quotation.invoiceNumber });
     }
     const invoiceNumber = await generateInvoiceNumber();
     quotation.invoiceNumber = invoiceNumber;
@@ -412,10 +625,13 @@ exports.generateInvoiceNumber = async (req, res) => {
     return res.status(201).json({ success: true, invoiceNumber });
   } catch (error) {
     console.error("Error generating invoice number:", error);
-    return res.status(500).json({ success: false, message: "Failed to generate invoice number", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate invoice number",
+      error: error.message,
+    });
   }
 };
-
 
 // DELETE /api/quotations/:id
 exports.deleteQuotation = async (req, res) => {
@@ -423,81 +639,373 @@ exports.deleteQuotation = async (req, res) => {
     const { id } = req.params;
     const quotation = await Quotation.findByIdAndDelete(id);
     if (!quotation) {
-      return res.status(404).json({ success: false, message: "Quotation not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
     }
-    return res.status(200).json({ success: true, message: "Quotation deleted successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Quotation deleted successfully" });
   } catch (error) {
     console.error("Error deleting quotation:", error);
-    return res.status(500).json({ success: false, message: "Failed to delete quotation", error: error.message });
-  }
-};
-
-
-// PUT /api/quotations/assign-vendor/:quotationId/package/:packageId/service/:serviceId
-exports.assignVendorToService = async (req, res) => {
-  const { quotationId, packageId, serviceName } = req.params;
-  const { vendorId, vendorName } = req.body;
-
-  try {
-    // Step 1: Find the quotation by _id
-    const quotation = await Quotation.findById(quotationId);
-    if (!quotation) {
-      return res.status(404).json({ success: false, message: 'Quotation not found' });
-    }
-
-    // Step 2: Find the correct package
-    const selectedPackage = quotation.packages.id(packageId);
-    if (!selectedPackage) {
-      return res.status(404).json({ success: false, message: 'Package not found in quotation' });
-    }
-
-    // Step 3: Find the correct service
-    const service = selectedPackage.services.find(s => s.serviceName === serviceName);
-    if (!service) {
-      return res.status(404).json({ success: false, message: 'Service not found in package' });
-    }
-
-    // Step 4: If old vendor is assigned → make them Available first
-    if (service.assignedVendor && service.assignedVendor.vendorId) {
-      const oldVendorId = service.assignedVendor.vendorId;
-      await Vendor.findByIdAndUpdate(oldVendorId, { status: 'Available' });
-    }
-
-    // Step 5: Get vendor category from DB
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) {
-      return res.status(404).json({ success: false, message: 'Vendor not found' });
-    }
-
-    // Step 6: Assign the new vendor
-    service.assignedVendor = {
-      vendorId: new mongoose.Types.ObjectId(vendorId),
-      vendorName,
-      category: vendor.category // 'Inhouse Vendor' or 'Outsource Vendor'
-    };
-
-    // Step 7: Save the updated quotation
-    await quotation.save();
-
-    // Step 8: Set new vendor to Not Available
-    await Vendor.findByIdAndUpdate(vendorId, { status: 'Not Available' });
-
-    // Step 9: Return success response
-    return res.status(200).json({
-      success: true,
-      message: `Vendor ${vendorName} successfully assigned to ${serviceName}`,
-    });
-
-  } catch (error) {
-    console.error("Assign vendor error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "Failed to delete quotation",
       error: error.message,
     });
   }
 };
 
+// Helper to ensure arr length >= len with nulls
+function ensureCapacity(arr, len) {
+  if (!Array.isArray(arr)) arr = [];
+  while (arr.length < len) arr.push(null);
+  return arr;
+}
+
+/**
+ * PUT /api/quotations/:quotationId/package/:packageId/service/:serviceId/unit/:unitIndex/assign-vendor
+ * Body: { vendorId?: string|null, vendorName?: string }
+ * If vendorId is null/undefined => clear at that unit
+ */
+// exports.assignVendorToServiceUnit = async (req, res) => {
+//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
+//   const { vendorId, vendorName,  slot, eventStartDate} = req.body;
+
+//   try {
+//     const quotation = await Quotation.findById(quotationId);
+//     if (!quotation)
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Quotation not found" });
+
+//     const pkg = quotation.packages.id(packageId);
+//     if (!pkg)
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Package not found in quotation" });
+
+//     const service = pkg.services.id(serviceId);
+//     if (!service)
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Service not found in package" });
+
+//     const unit = parseInt(unitIndex, 10);
+//     const qty = Math.max(1, service.qty || 1);
+//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Invalid unitIndex" });
+//     }
+
+//     // Grow arrays to match qty for safe indexing
+//     service.assignedVendors = ensureCapacity(service.assignedVendors, qty);
+
+//     // Free previously assigned vendor for this unit (optional: availability)
+//     const old = service.assignedVendors[unit];
+//     if (old?.vendorId) {
+//       // If you track availability globally, consider checking if the old vendor
+//       // is used elsewhere before setting Available.
+//       await Vendor.findByIdAndUpdate(old.vendorId, {
+//         // status: "Available",
+//       }).catch(() => {});
+//     }
+
+//     if (vendorId) {
+//       const ven = await Vendor.findById(vendorId);
+//       if (!ven)
+//         return res
+//           .status(404)
+//           .json({ success: false, message: "Vendor not found" });
+
+//       service.assignedVendors[unit] = {
+//         vendorId: new mongoose.Types.ObjectId(vendorId),
+//         vendorName: vendorName || ven.name,
+//         category: ven.category,
+//       };
+
+//       // Mark new vendor unavailable (if you use this)
+//       await Vendor.findByIdAndUpdate(vendorId, {
+//         status: "Not Available",
+//       }).catch(() => {});
+//     } else {
+//       // Clear vendor
+//       service.assignedVendors[unit] = null;
+//     }
+
+//     await quotation.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: vendorId
+//         ? `Vendor assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+//         : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
+//       service,
+//     });
+//   } catch (err) {
+//     console.error("assignVendorToServiceUnit error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: err.message,
+//     });
+//   }
+// };
+
+exports.assignVendorToServiceUnit = async (req, res) => {
+  const { quotationId, packageId, serviceId, unitIndex } = req.params;
+  const { vendorId, vendorName, slot, eventStartDate } = req.body;
+
+  try {
+    const quotation = await Quotation.findById(quotationId);
+    if (!quotation) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Quotation not found" 
+      });
+    }
+
+    const pkg = quotation.packages.id(packageId);
+    if (!pkg) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Package not found in quotation" 
+      });
+    }
+
+    const service = pkg.services.id(serviceId);
+    if (!service) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Service not found in package" 
+      });
+    }
+
+    const unit = parseInt(unitIndex, 10);
+    const qty = Math.max(1, service.qty || 1);
+    
+    if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid unitIndex" 
+      });
+    }
+
+    // Validate required fields for assignment
+    if (vendorId && (!vendorName || !slot || !eventStartDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "vendorName, slot, and eventStartDate are required when assigning a vendor"
+      });
+    }
+
+    // Grow arrays to match qty for safe indexing
+    service.assignedVendors = ensureCapacity(service.assignedVendors, qty);
+
+    // Free previously assigned vendor for this unit
+    const previousAssignment = service.assignedVendors[unit];
+    if (previousAssignment?.vendorId) {
+      // Remove old vendor from inventory for this specific date/slot
+      await VendorInventory.findOneAndDelete({
+        vendorId: previousAssignment.vendorId,
+        date: eventStartDate,
+        slot: slot,
+        quotationId: quotationId,
+        serviceId: serviceId,
+        unitIndex: unit
+      }).catch(console.error);
+      
+      // Update vendor status back to available
+      await Vendor.findByIdAndUpdate(previousAssignment.vendorId, {
+        status: "Available",
+      }).catch(console.error);
+    }
+
+    if (vendorId) {
+      const vendor = await Vendor.findById(vendorId);
+      if (!vendor) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Vendor not found" 
+        });
+      }
+
+      // Use provided vendorName or fallback to vendor document name
+      const finalVendorName = vendorName || vendor.name;
+
+      // Check if vendor is already booked for this date and slot
+      const existingBooking = await VendorInventory.findOne({
+        vendorId: vendorId,
+        date: eventStartDate,
+        slot: slot
+      });
+
+      if (existingBooking) {
+        return res.status(400).json({
+          success: false,
+          message: `Vendor ${finalVendorName} is already booked for ${eventStartDate} (${slot} slot)`
+        });
+      }
+
+      // Check vendor availability
+      if (vendor.status === "Not Available") {
+        // Additional check to see if they're available for this specific date
+        const otherBookings = await VendorInventory.find({
+          vendorId: vendorId,
+          date: eventStartDate
+        });
+        
+        if (otherBookings.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Vendor ${finalVendorName} is not available on ${eventStartDate}`
+          });
+        }
+      }
+
+      // Update service assignment
+      service.assignedVendors[unit] = {
+        vendorId: new mongoose.Types.ObjectId(vendorId),
+        vendorName: finalVendorName,
+        category: vendor.category,
+        assignedDate: new Date(),
+        slot: slot,
+        eventDate: eventStartDate
+      };
+
+      // Add vendor to inventory with all relevant information
+      const vendorInventoryEntry = new VendorInventory({
+        vendorId: vendorId,
+        vendorName: finalVendorName,
+        vendorCategory: vendor.category,
+        date: eventStartDate,
+        slot: slot,
+        quotationId: quotationId,
+        packageId: packageId,
+        serviceId: serviceId,
+        serviceName: service.serviceName,
+        unitIndex: unit,
+        status: "Booked"
+      });
+      
+      await vendorInventoryEntry.save();
+
+      // Update vendor status
+      await Vendor.findByIdAndUpdate(vendorId, {
+        status: "Not Available",
+      }).catch(console.error);
+
+    } else {
+      // Clear vendor assignment
+      service.assignedVendors[unit] = null;
+    }
+
+    await quotation.save();
+
+    return res.status(200).json({
+      success: true,
+      message: vendorId
+        ? `Vendor ${vendorName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+        : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
+      service: service.toObject ? service.toObject() : service,
+    });
+
+  } catch (err) {
+    console.error("assignVendorToServiceUnit error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    });
+  }
+};
+
+// Helper function to ensure array capacity
+function ensureCapacity(array, capacity) {
+  if (!array) array = [];
+  while (array.length < capacity) {
+    array.push(null);
+  }
+  return array;
+}
+
+/**
+ * PUT /api/quotations/:quotationId/package/:packageId/service/:serviceId/unit/:unitIndex/assign-assistant
+ * Body: { assistantId?: string|null, assistantName?: string }
+ * If assistantId is null/undefined => clear at that unit
+ */
+exports.assignAssistantToServiceUnit = async (req, res) => {
+  const { quotationId, packageId, serviceId, unitIndex } = req.params;
+  const { assistantId, assistantName } = req.body;
+
+  try {
+    const quotation = await Quotation.findById(quotationId);
+    if (!quotation)
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+
+    const pkg = quotation.packages.id(packageId);
+    if (!pkg)
+      return res
+        .status(404)
+        .json({ success: false, message: "Package not found in quotation" });
+
+    const service = pkg.services.id(serviceId);
+    if (!service)
+      return res
+        .status(404)
+        .json({ success: false, message: "Service not found in package" });
+
+    const unit = parseInt(unitIndex, 10);
+    const qty = Math.max(1, service.qty || 1);
+    if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid unitIndex" });
+    }
+
+    // ensure array sized
+    service.assignedAssistants = ensureCapacity(
+      service.assignedAssistants,
+      qty
+    );
+
+    if (assistantId) {
+      const asst = await Vendor.findById(assistantId); // optional lookup
+      service.assignedAssistants[unit] = {
+        assistantId: new mongoose.Types.ObjectId(assistantId),
+        assistantName: assistantName || asst?.name || "",
+        category: asst?.category, // optional
+      };
+    } else {
+      // clear; choose one style and keep it consistent everywhere
+      service.assignedAssistants[unit] = {}; // or null if you removed pre-save padding
+    }
+
+    await quotation.save();
+
+    return res.status(200).json({
+      success: true,
+      message: assistantId
+        ? `Assistant assigned to ${service.serviceName} (unit ${
+            unit + 1
+          }/${qty})`
+        : `Assistant cleared for ${service.serviceName} (unit ${
+            unit + 1
+          }/${qty})`,
+      service,
+    });
+  } catch (err) {
+    console.error("assignAssistantToServiceUnit error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
 
 // GET /api/quotations/booked-events-by-date/:date
 exports.getBookedEventsByDate = async (req, res) => {
@@ -581,14 +1089,13 @@ exports.getBookedEventsForToday = async (req, res) => {
   }
 };
 
-
 exports.getQuotationsByStatus = async (req, res) => {
   try {
     const { page, limit, search = "" } = req.query;
     const { status } = req.params;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const searchRegex = new RegExp(search, "i");
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const today = new Date().toISOString().slice(0, 10);
 
     // Only fetch quotations with at least one package whose eventStartDate is today or in the future
     const filter = {
@@ -625,14 +1132,57 @@ exports.getQuotationsByStatus = async (req, res) => {
   }
 };
 
+exports.getBookedAndCompletedQuotations = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const searchRegex = new RegExp(search, "i");
 
+    // Filter for Booked and Completed statuses
+    const filter = {
+      bookingStatus: { $in: ["Booked", "Completed"] },
+      ...(search && { quotationId: { $regex: searchRegex } }),
+    };
+
+    const [quotations, total] = await Promise.all([
+      Quotation.find(filter)
+        .populate({
+          path: "leadId",
+          select: "persons", // Only get persons from lead
+        })
+        .sort({ createdAt: -1 }) // Newest first
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Quotation.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      quotations,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error("Error fetching booked/completed quotations:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch quotations",
+      error: error.message,
+    });
+  }
+};
 
 exports.addClientInstruction = async (req, res) => {
   const { quotationId } = req.params;
   const { instruction } = req.body;
 
   if (!instruction || instruction.trim() === "") {
-    return res.status(400).json({ success: false, message: "Instruction cannot be empty." });
+    return res
+      .status(400)
+      .json({ success: false, message: "Instruction cannot be empty." });
   }
 
   try {
@@ -643,7 +1193,9 @@ exports.addClientInstruction = async (req, res) => {
     );
 
     if (!updatedQuotation) {
-      return res.status(404).json({ success: false, message: "Quotation not found." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found." });
     }
 
     return res.status(200).json({
@@ -653,10 +1205,11 @@ exports.addClientInstruction = async (req, res) => {
     });
   } catch (error) {
     console.error("Add Instruction Error:", error);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 };
-
 
 exports.deleteClientInstruction = async (req, res) => {
   const { quotationId } = req.params;
@@ -670,7 +1223,9 @@ exports.deleteClientInstruction = async (req, res) => {
     );
 
     if (!updatedQuotation) {
-      return res.status(404).json({ success: false, message: "Quotation not found." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found." });
     }
 
     return res.status(200).json({
@@ -680,12 +1235,11 @@ exports.deleteClientInstruction = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete Instruction Error:", error);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 };
-
-
-
 
 exports.getCompletedInstallments = async (req, res) => {
   try {
@@ -740,3 +1294,301 @@ exports.getCompletedInstallments = async (req, res) => {
   }
 };
 
+exports.updateCalculation = async (req, res) => {
+  console.log("req.body calc", req.body);
+  try {
+    const { package: updatedPackage, ...totals } = req.body;
+
+    // 1. Find the quotation
+    const quotation = await Quotation.findById(req.params.id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    // 2. Update the specific package if provided
+    if (updatedPackage && updatedPackage._id) {
+      const packageIndex = quotation.packages.findIndex(
+        (pkg) => pkg._id.toString() === updatedPackage._id
+      );
+
+      if (packageIndex !== -1) {
+        // Replace the package with the updated one
+        quotation.packages[packageIndex] = updatedPackage;
+      } else {
+        // If package not found but has _id, it might be an error
+        return res.status(400).json({
+          success: false,
+          message: "Package not found in quotation",
+        });
+      }
+    }
+
+    // 3. Update all the calculated totals
+    quotation.totalPackageAmt = totals.totalPackageAmt;
+    quotation.totalAlbumAmount = totals.totalAlbumAmount;
+    quotation.discountValue = totals.discountValue;
+    quotation.gstValue = totals.gstValue;
+    quotation.totalAmount = totals.totalAmount;
+    quotation.grandTotal = totals.grandTotal;
+    quotation.totalMarginFinal = totals.totalMarginFinal;
+
+    // 4. Update installments (replace completely)
+    quotation.installments = totals.installments.map((inst) => ({
+      installmentNumber: inst.installmentNumber,
+      dueDate: inst.dueDate,
+      paymentMode: inst.paymentMode,
+      paymentAmount: inst.paymentAmount,
+      paymentPercentage: inst.paymentPercentage,
+      paidAmount: inst.paidAmount,
+      pendingAmount: inst.pendingAmount,
+      status: inst.status,
+      _id: inst._id, // Preserve existing _id
+    }));
+
+    // 5. Save the updated quotation
+    const updatedQuotation = await quotation.save();
+
+    res.json({
+      success: true,
+      quotation: updatedQuotation,
+    });
+  } catch (err) {
+    console.error("Error updating quotation:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update quotation",
+      error: err.message,
+    });
+  }
+};
+
+// PUT /api/quotations/:quotationId/installment/:installmentId/payment
+exports.recordPayment = async (req, res) => {
+  try {
+    const { quotationId, installmentId } = req.params;
+    const { paymentAmount, paymentMode, paymentDate, status } = req.body;
+
+    // Find the quotation
+    const quotation = await Quotation.findById(quotationId);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    // Find the specific installment
+    const installmentIndex = quotation.installments.findIndex(
+      (inst) => inst._id.toString() === installmentId
+    );
+
+    if (installmentIndex === -1) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Installment not found" });
+    }
+
+    const installment = quotation.installments[installmentIndex];
+
+    // Validate the payment amount
+    if (paymentAmount <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Payment amount must be positive" });
+    }
+
+    if (paymentAmount > installment.pendingAmount) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment amount exceeds pending amount",
+      });
+    }
+
+    // Calculate new values
+    const newPaidAmount = (installment.paidAmount || 0) + paymentAmount;
+    const newPendingAmount = installment.pendingAmount - paymentAmount;
+    const newStatus =
+      newPendingAmount <= 0 ? "Completed" : status || "Partial Paid";
+
+    // Update the installment with all payment details
+    quotation.installments[installmentIndex] = {
+      ...installment.toObject(), // Keep all existing fields
+      paidAmount: newPaidAmount,
+      pendingAmount: newPendingAmount,
+      status: newStatus,
+      paymentMode: paymentMode || installment.paymentMode, // Use new mode or keep existing
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(), // Use provided date or current date
+      dueDate: installment.dueDate, // Preserve original due date
+    };
+
+    // Save the updated quotation
+    const updatedQuotation = await quotation.save();
+
+    return res.json({
+      success: true,
+      message: "Payment recorded successfully",
+      installment: updatedQuotation.installments[installmentIndex],
+      quotation: updatedQuotation,
+    });
+  } catch (err) {
+    console.error("Payment recording error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to record payment",
+      error: err.message,
+    });
+  }
+};
+
+// PUT /api/quotations/:id/booking-status
+exports.updateBookingStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const finalStatus = status ?? "Completed";
+    const allowed = ["NotBooked", "Booked", "Completed"];
+    if (!allowed.includes(finalStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Allowed: ${allowed.join(", ")}`,
+      });
+    }
+
+    const filter = mongoose.isValidObjectId(id)
+      ? { _id: id }
+      : { quotationId: id }; // use human id when not ObjectId
+
+    const updated = await Quotation.findOneAndUpdate(
+      filter,
+      { $set: { bookingStatus: finalStatus } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Booking status updated",
+      quotation: updated,
+    });
+  } catch (err) {
+    console.error("updateBookingStatus error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update booking status",
+      error: err.message,
+    });
+  }
+};
+
+// In your backend routes file (e.g., routes/quotations.js)
+exports.getQuotaionByQueryId = async (req, res) => {
+  try {
+    const { queryId } = req.params;
+
+    const bookedQuotations = await Quotation.find({
+      queryId: queryId,
+      bookingStatus: "Booked",
+    }).populate("leadId"); // Populate lead data if needed
+
+    res.json({
+      success: true,
+      data: bookedQuotations,
+      count: bookedQuotations.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch booked quotations",
+      error: error.message,
+    });
+  }
+};
+
+exports.countPendingPaymentQuotations = async (req, res) => {
+  try {
+    const pendingQuotations = await Quotation.find({
+      bookingStatus: "Booked",
+      "installments.status": { $in: ["Pending", "Partial Paid"] },
+    });
+
+    res.status(200).json({
+      success: true,
+      count: pendingQuotations.length,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error: Could not retrieve pending payment count",
+      error: error.message,
+    });
+  }
+};
+
+exports.countTodaysEvents = async (req, res) => {
+  try {
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split("T")[0];
+
+    const count = await Quotation.countDocuments({
+      bookingStatus: "Booked",
+      $or: [
+        // Events that start today and have no end date (single day events)
+        {
+          "packages.eventStartDate": today,
+          "packages.eventEndDate": { $exists: false },
+        },
+        // Events that start today (regardless of end date)
+        { "packages.eventStartDate": today },
+        // Events that are ongoing (today is between start and end dates)
+        {
+          "packages.eventStartDate": { $lte: today },
+          "packages.eventEndDate": { $gte: today },
+        },
+      ],
+    });
+
+    res.status(200).json({
+      success: true,
+      count: count,
+      date: today,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error: Could not retrieve today's events count",
+      error: error.message,
+    });
+  }
+};
+
+// controllers/quotationController.js
+
+exports.countCompletedQuotations = async (req, res) => {
+  try {
+    const count = await Quotation.countDocuments({
+      bookingStatus: "Completed",
+    });
+
+    res.status(200).json({
+      success: true,
+      count: count,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error: Could not retrieve completed quotations count",
+      error: error.message,
+    });
+  }
+};

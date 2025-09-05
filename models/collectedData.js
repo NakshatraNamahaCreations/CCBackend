@@ -15,8 +15,8 @@ const EventDataSchema = new mongoose.Schema(
     notes: { type: String },
     editingStatus: {
       type: String,
-      enum: ["Pending", "In Process", "Completed"],
-      default: "Pending", // Default when added
+ 
+      default: "Pending", 
     },
   },
   { timestamps: true }

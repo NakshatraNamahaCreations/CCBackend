@@ -109,15 +109,15 @@ exports.addOrUpdateEventData = async (req, res) => {
 };
 
 
-exports.updateEditingStatus = async (req, res) => {
-  const { quotationId, eventId, status } = req.body;
-  const data = await CollectedData.findOneAndUpdate(
-    { quotationId, "events.eventId": eventId },
-    { $set: { "events.$.editingStatus": status } },
-    { new: true }
-  );
-  res.json({ success: true, data });
-};
+// exports.updateEditingStatus = async (req, res) => {
+//   const { quotationId, eventId, status } = req.body;
+//   const data = await CollectedData.findOneAndUpdate(
+//     { quotationId, "events.eventId": eventId },
+//     { $set: { "events.$.editingStatus": status } },
+//     { new: true }
+//   );
+//   res.json({ success: true, data });
+// };
 
 // Fetch collected data for a quotation
 exports.getCollectedDataByQuotation = async (req, res) => {
@@ -197,3 +197,52 @@ exports.getCollectedDataById = async (req, res) => {
 
 
 
+// / PUT /api/collected-data/:collectedDataId/events/:eventId/status
+exports.updateEditingStatus = async (req, res) => {
+  try {
+    const { collectedDataId, eventId } = req.params;
+    const { newStatus, status } = req.body;
+
+    const finalStatus = newStatus ?? status;
+    const validStatuses = ["Pending", "In Process", "Completed"];
+    if (!validStatuses.includes(finalStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status. Must be one of: Pending, In Process, Completed",
+      });
+    }
+
+    // IMPORTANT: Your EventDataSchema has both _id (subdoc id) and eventId (package id).
+    // In your UI you pass event.eventId, so match on events.eventId here:
+    const updatedDoc = await CollectedData.findOneAndUpdate(
+      { _id: collectedDataId, "events.eventId": eventId },
+      { $set: { "events.$.editingStatus": finalStatus } },
+      { new: true }
+    );
+
+    if (!updatedDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Collected data or event not found",
+      });
+    }
+
+    // Return just the updated event
+    const updatedEvent =
+      updatedDoc.events.find(e => e.eventId?.toString() === eventId) ||
+      updatedDoc.events.find(e => e._id?.toString() === eventId); // fallback if you swap ids later
+
+    return res.status(200).json({
+      success: true,
+      message: "Editing status updated successfully",
+      data: updatedEvent,
+    });
+  } catch (error) {
+    console.error("Error updating editing status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update editing status",
+      error: error.message,
+    });
+  }
+};

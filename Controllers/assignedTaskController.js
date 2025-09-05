@@ -1,193 +1,3 @@
-// const AssignedTask = require('../models/assignedTask');
-// const Vendor = require('../models/vendor.model');
-
-// exports.assignTask = async (req, res) => {
-//   console.log("Request:", req.body);
-
-//   const {
-//     quotationId,
-//     eventId,
-//     eventName,
-//     serviceName,
-//     totalPhotos,
-//     totalVideos,
-//     assignments
-//   } = req.body;
-
-//   if (
-//     !quotationId ||
-//     !eventId ||
-//     !eventName ||
-//     !serviceName ||
-//     !assignments ||
-//     !Array.isArray(assignments) ||
-//     assignments.length === 0
-//   ) {
-//     return res.status(400).json({
-//       success: false,
-//       message: 'All required fields must be provided and assignments must be a non-empty array.',
-//     });
-//   }
-
-//   try {
-//     let assignedTask = await AssignedTask.findOne({ quotationId, eventId, serviceName });
-
-//     if (assignedTask) {
-//       // ✅ Merge new assignments instead of overwriting
-//       assignedTask.totalPhotos = totalPhotos ?? assignedTask.totalPhotos;
-//       assignedTask.totalVideos = totalVideos ?? assignedTask.totalVideos;
-
-//       assignedTask.assignments.push(...assignments);
-//       await assignedTask.save();
-//     } else {
-//       // ✅ Create new task
-//       assignedTask = await AssignedTask.create({
-//         quotationId,
-//         eventId,
-//         eventName,
-//         serviceName,
-//         totalPhotos,
-//         totalVideos,
-//         assignments
-//       });
-//     }
-
-//     // ✅ Mark all assigned vendors as Not Available
-//     const vendorIds = assignments.map(a => a.vendorId);
-//     await Vendor.updateMany(
-//       { _id: { $in: vendorIds } },
-//       { $set: { status: 'Not Available' } }
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       message: 'Task assigned and vendor status updated successfully',
-//       data: assignedTask
-//     });
-
-//   } catch (error) {
-//     console.error('Error assigning task:', error);
-//     return res.status(500).json({ success: false, message: 'Server error' });
-//   }
-// };
-
-// exports.getOverallCounts = async (req, res) => {
-//   const { quotationId, eventId } = req.query;
-
-//   if (!quotationId || !eventId) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "quotationId and eventId are required",
-//     });
-//   }
-
-//   try {
-//     const assignedTasks = await AssignedTask.find({ quotationId, eventId });
-
-//     if (!assignedTasks.length) {
-//       return res.status(200).json({
-//         success: true,
-//         data: {
-//           totalPhotos: 0,
-//           totalVideos: 0,
-//           assignedPhotos: 0,
-//           assignedVideos: 0,
-//           remainingPhotos: 0,
-//           remainingVideos: 0,
-//         },
-//       });
-//     }
-
-//     const totalPhotos = assignedTasks.reduce((sum, t) => sum + (t.totalPhotos || 0), 0);
-//     const totalVideos = assignedTasks.reduce((sum, t) => sum + (t.totalVideos || 0), 0);
-//     const assignedPhotos = assignedTasks.reduce((sum, t) => sum + (t.assignedPhotos || 0), 0);
-//     const assignedVideos = assignedTasks.reduce((sum, t) => sum + (t.assignedVideos || 0), 0);
-
-//     res.status(200).json({
-//       success: true,
-//       data: {
-//         totalPhotos,
-//         totalVideos,
-//         assignedPhotos,
-//         assignedVideos,
-//         remainingPhotos: totalPhotos - assignedPhotos,
-//         remainingVideos: totalVideos - assignedVideos,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error fetching overall counts:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
-
-// // Get detailed assignment counts for a specific event/service
-// exports.getAssignmentCounts = async (req, res) => {
-//   const { quotationId, eventId, serviceName } = req.query;
-
-//   if (!quotationId || !eventId || !serviceName) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "quotationId, eventId, and serviceName are required",
-//     });
-//   }
-
-//   try {
-//     const assignedTask = await AssignedTask.findOne({
-//       quotationId,
-//       eventId,
-//       serviceName,
-//     });
-
-//     if (!assignedTask) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Assigned task not found",
-//       });
-//     }
-
-//     const {
-//       totalPhotos,
-//       totalVideos,
-//       remainingPhotosToAssign,
-//       remainingVideosToAssign,
-//       assignments,
-//     } = assignedTask;
-
-//     // ✅ Vendor-wise breakdown
-//     const vendorAssignments = assignments.map((a) => ({
-//       vendorName: a.vendorName,
-//       photosAssigned: a.photosAssigned,
-//       videosAssigned: a.videosAssigned,
-//     }));
-
-//     // ✅ Total assigned counts
-//     const assignedPhotos = assignments.reduce((sum, a) => sum + (a.photosAssigned || 0), 0);
-//     const assignedVideos = assignments.reduce((sum, a) => sum + (a.videosAssigned || 0), 0);
-
-//     res.status(200).json({
-//       success: true,
-//       data: {
-//         totalPhotos,
-//         totalVideos,
-//         assignedPhotos,
-//         assignedVideos,
-//         remainingPhotosToAssign: (totalPhotos || 0) - assignedPhotos,
-//         remainingVideosToAssign: (totalVideos || 0) - assignedVideos,
-//         vendorAssignments
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error fetching assignment counts:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
-
 const AssignedTask = require("../models/assignedTask");
 const Vendor = require("../models/vendor.model");
 const mongoose = require("mongoose");
@@ -311,6 +121,8 @@ exports.assignTask = async (req, res) => {
 };
 
 
+
+
 exports.getOverallCounts = async (req, res) => {
   const { quotationId, eventId } = req.query;
 
@@ -387,8 +199,6 @@ exports.getOverallCounts = async (req, res) => {
   }
 };
 
-
-
 // GET /api/assignments/:eventId/:serviceName
 exports.getAssignmentsByEventAndService = async (req, res) => {
   try {
@@ -435,9 +245,6 @@ exports.getAssignmentsByEventAndService = async (req, res) => {
   }
 };
 
-
-
-
 exports.getAssignedCounts = async (req, res) => {
   try {
     const { quotationId, eventId } = req.query;
@@ -474,6 +281,83 @@ exports.getAssignedCounts = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error",
+    });
+  }
+};
+
+
+exports.getDetailedMediaAssignmentStatus = async (req, res) => {
+  try {
+    const { quotationId } = req.query;
+    const query = quotationId ? { quotationId } : {};
+
+    const tasks = await AssignedTask.find(query);
+
+    const result = {
+      summary: {
+        totalEvents: tasks.length,
+        completedEvents: 0,
+        inProgressEvents: 0,
+        totalPhotos: 0,
+        totalVideos: 0,
+        assignedPhotos: 0,
+        assignedVideos: 0,
+        remainingPhotos: 0,
+        remainingVideos: 0
+      },
+      eventDetails: []
+    };
+
+    for (const task of tasks) {
+      const remainingPhotos = Math.max(task.totalPhotos - task.assignedPhotos, 0);
+      const remainingVideos = Math.max(task.totalVideos - task.assignedVideos, 0);
+
+      // Determine event status (you might want to adjust this logic)
+      const isCompleted = remainingPhotos === 0 && remainingVideos === 0;
+
+      if (isCompleted) {
+        result.summary.completedEvents++;
+      } else {
+        result.summary.inProgressEvents++;
+      }
+
+      result.summary.totalPhotos += task.totalPhotos;
+      result.summary.totalVideos += task.totalVideos;
+      result.summary.assignedPhotos += task.assignedPhotos;
+      result.summary.assignedVideos += task.assignedVideos;
+      result.summary.remainingPhotos += remainingPhotos;
+      result.summary.remainingVideos += remainingVideos;
+
+      result.eventDetails.push({
+        eventId: task.eventId,
+        eventName: task.eventName,
+        quotationId: task.quotationId,
+        status: isCompleted ? 'Completed' : 'In Progress',
+        totalPhotos: task.totalPhotos,
+        totalVideos: task.totalVideos,
+        assignedPhotos: task.assignedPhotos,
+        assignedVideos: task.assignedVideos,
+        remainingPhotos,
+        remainingVideos,
+        completionPercentage: {
+          photos: task.totalPhotos > 0 ? 
+            Math.round((task.assignedPhotos / task.totalPhotos) * 100) : 0,
+          videos: task.totalVideos > 0 ? 
+            Math.round((task.assignedVideos / task.totalVideos) * 100) : 0
+        }
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error("Error getting detailed media status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
     });
   }
 };

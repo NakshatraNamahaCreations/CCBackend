@@ -11,7 +11,8 @@ router.post('/', vendorCtrl.createVendor);
 router.get('/', vendorCtrl.getAllVendors);
 
 // Get Vendors by Service Name with pagination and search
-router.get('/service-name/:serviceName', vendorCtrl.getVendorsByServiceName);
+// router.get('/service-name/:serviceName', vendorCtrl.getVendorsByServiceName);
+router.get('/service-name/:serviceName', vendorCtrl.getAvailableVendorsByServiceAndDate);
 
 // Get Vendors by Service ID with pagination and search (legacy)
 router.get('/service/:serviceId', vendorCtrl.getVendorsByServiceId);
@@ -21,7 +22,7 @@ router.put('/:id', vendorCtrl.updateVendor);
 
 // Delete Vendor
 router.delete('/:id', vendorCtrl.deleteVendor);
-router.get('/inhouse/available', vendorCtrl.getAvailableInhouseVendors);
+router.get('/inhouse', vendorCtrl.getAvailableInhouseVendors);
 
 module.exports = router;
 

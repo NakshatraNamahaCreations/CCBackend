@@ -20,7 +20,11 @@ const collectedDataRoutes = require('./routes/collectedDataRoutes');
 const assignedTaskRoutes = require('./routes/assignedTaskRoutes');
 const vendorSubmissionRoutes = require('./routes/vendorSubmissionRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
-
+const albumRoutes = require('./routes/albumRoutes');
+const dailyTaskRoutes = require("./routes/dailyTaskRoutes")
+const followUpRoutes = require("./routes/followUpRoutes")
+const vendorInventoryRoutes = require("./routes/vendorInventoryRoutes")
+const vendorPaymentsRoutes = require("./routes/vendorPaymentsRoutes")
 
 
 dotenv.config();
@@ -92,6 +96,7 @@ app.use("/api/preset-quotation", presetQuotationRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/package', packageRoutes);
 app.use('/api/quotations', quotationRoutes);
+app.use("/api/quotations", albumRoutes); 
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/users', userRoutes);
@@ -101,7 +106,10 @@ app.use('/api/collected-data', collectedDataRoutes);
 app.use('/api/task', assignedTaskRoutes);
 app.use('/api/task-submission', vendorSubmissionRoutes);
 app.use("/api/payments", paymentRoutes);
-
+app.use('/api/daily-tasks', dailyTaskRoutes);
+app.use('/api/follow-up', followUpRoutes);
+app.use('/api/vendor-inventory', vendorInventoryRoutes);
+app.use('/api/vendor-payments', vendorPaymentsRoutes);
 
 
 
