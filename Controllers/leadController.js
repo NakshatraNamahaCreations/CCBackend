@@ -587,7 +587,7 @@ exports.updateLeadQueryDetails = async (req, res) => {
   }
 };
 
-// Update Query Status by ID
+
 // Update Query Status by ID
 exports.updateQueryStatus = async (req, res) => {
   try {
@@ -735,5 +735,310 @@ exports.getCallLaterQueriesbyDate = async (req, res) => {
   } catch (err) {
     console.error("Error fetching queries:", err);
     res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+
+// Alternative API using aggregation for better performance
+// exports.getQueriesbyEventstartDate = async (req, res) => {
+//   try {
+//     const { startDate } = req.params;
+//     const targetDate = new Date(startDate);
+    
+//     if (isNaN(targetDate.getTime())) {
+//       return res.status(400).json({ 
+//         error: 'Invalid date format. Please use YYYY-MM-DD format.' 
+//       });
+//     }
+
+//     const startOfDay = new Date(targetDate);
+//     startOfDay.setHours(0, 0, 0, 0);
+    
+//     const endOfDay = new Date(targetDate);
+//     endOfDay.setHours(23, 59, 59, 999);
+
+//     const leads = await Lead.aggregate([
+//       {
+//         $lookup: {
+//           from: 'queries', // Make sure this matches your collection name
+//           localField: 'queries',
+//           foreignField: '_id',
+//           as: 'queries'
+//         }
+//       },
+//       {
+//         $unwind: '$queries'
+//       },
+//       {
+//         $match: {
+//           'queries.eventDetails.eventStartDate': {
+//             $gte: startOfDay,
+//             $lte: endOfDay
+//           }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: '$_id',
+//           leadId: { $first: '$leadId' },
+//           persons: { $first: '$persons' },
+//           referenceForm: { $first: '$referenceForm' },
+//           createdAt: { $first: '$createdAt' },
+//           queries: { $push: '$queries' }
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 1,
+//           leadId: 1,
+//           persons: 1,
+//           referenceForm: 1,
+//           createdAt: 1,
+//           queries: {
+//             $filter: {
+//               input: '$queries',
+//               as: 'query',
+//               cond: {
+//                 $and: [
+//                   { $gte: ['$$query.eventDetails.eventStartDate', startOfDay] },
+//                   { $lte: ['$$query.eventDetails.eventStartDate', endOfDay] }
+//                 ]
+//               }
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     res.json({
+//       success: true,
+//       count: leads.length,
+//       leads: leads
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching leads by event date:', error);
+//     res.status(500).json({ 
+//       error: 'Internal server error',
+//       message: error.message 
+//     });
+//   }
+// };
+
+
+exports.getQueriesbyEventstartDate = async (req, res) => {
+  try {
+    const { startDate } = req.params;
+    const targetDate = new Date(startDate);
+
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        error: "Invalid date format. Please use YYYY-MM-DD format.",
+      });
+    }
+
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const leads = await Lead.aggregate([
+      // Join queries
+      {
+        $lookup: {
+          from: "queries",
+          localField: "queries",
+          foreignField: "_id",
+          as: "queries",
+        },
+      },
+      // Filter queries: keep only those that have events in the given date range
+      {
+        $addFields: {
+          queries: {
+            $filter: {
+              input: "$queries",
+              as: "q",
+              cond: {
+                $gt: [
+                  {
+                    $size: {
+                      $filter: {
+                        input: "$$q.eventDetails",
+                        as: "ev",
+                        cond: {
+                          $and: [
+                            { $gte: ["$$ev.eventStartDate", startOfDay] },
+                            { $lte: ["$$ev.eventStartDate", endOfDay] },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      },
+      // Now filter eventDetails inside each query
+      {
+        $addFields: {
+          queries: {
+            $map: {
+              input: "$queries",
+              as: "q",
+              in: {
+                queryId: "$$q.queryId",
+                status: "$$q.status",
+                comment: "$$q.comment",
+                callRescheduledDate: "$$q.callRescheduledDate",
+                createdAt: "$$q.createdAt",
+                updatedAt: "$$q.updatedAt",
+                eventDetails: {
+                  $filter: {
+                    input: "$$q.eventDetails",
+                    as: "ev",
+                    cond: {
+                      $and: [
+                        { $gte: ["$$ev.eventStartDate", startOfDay] },
+                        { $lte: ["$$ev.eventStartDate", endOfDay] },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      // Only keep leads with non-empty queries
+      { $match: { "queries.0": { $exists: true } } },
+      // Project fields
+      {
+        $project: {
+          leadId: 1,
+          persons: 1,
+          referenceForm: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          queries: 1,
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      count: leads.length,
+      leads,
+    });
+  } catch (error) {
+    console.error("Error fetching leads by event date:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+};
+
+// Instagram-only update endpoint
+exports.updateInstahandle =  async (req, res) => {
+  try {
+    const { leadId, personId } = req.params;
+    const { instagramHandle } = req.body;
+
+    // Validate input
+    if (instagramHandle === undefined || instagramHandle === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Instagram handle is required"
+      });
+    }
+
+    // Validate that leadId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead ID format"
+      });
+    }
+
+    // Find the lead by _id
+    const lead = await Lead.findById(leadId);
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found"
+      });
+    }
+
+    // Find the person in the lead
+    const person = lead.persons.id(personId);
+    if (!person) {
+      return res.status(404).json({
+        success: false,
+        message: "Person not found in this lead"
+      });
+    }
+
+    // Update the Instagram handle
+    person.instagramHandle = instagramHandle;
+
+    // Save the changes
+    await lead.save();
+
+    res.json({
+      success: true,
+      message: "Instagram handle updated successfully",
+      data: {
+        lead: {
+          _id: lead._id,
+          leadId: lead.leadId
+        },
+        person: {
+          _id: person._id,
+          name: person.name,
+          instagramHandle: person.instagramHandle
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating Instagram handle:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update Instagram handle",
+      error: error.message
+    });
+  }
+}
+
+
+exports.getTodayRescheduledCalls = async (req, res) => {
+  try {
+    // Use server-local "today" boundaries: [startOfToday, startOfTomorrow)
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    const results = await Query.find({
+      callRescheduledDate: { $gte: startOfToday, $lt: startOfTomorrow },
+    })
+      .select("queryId eventDetails status comment callRescheduledDate")
+      .sort({ callRescheduledDate: 1 });
+
+    res.json({
+      success: true,
+      count: results.length,
+    });
+  } catch (err) {
+    console.error("getTodayRescheduledCalls error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch today's rescheduled calls",
+      error: err.message,
+    });
   }
 };

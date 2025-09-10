@@ -43,6 +43,7 @@ exports.createQuotation = async (req, res) => {
       queryId,
       quoteTitle = "",
       quoteDescription = "",
+      quoteNote="",
       packages = [],
       installments = [],
       totalAmount = 0,
@@ -96,6 +97,7 @@ exports.createQuotation = async (req, res) => {
       quotationId,
       quoteTitle,
       quoteDescription,
+      quoteNote,
       packages,
       installments: processedInstallments,
       totalAmount,
@@ -143,6 +145,7 @@ exports.updateQuotation = async (req, res) => {
       queryId,
       quoteTitle,
       quoteDescription,
+      quoteNote,
       packages,
       installments,
       totalAmount,
@@ -170,6 +173,8 @@ exports.updateQuotation = async (req, res) => {
     if (quoteTitle !== undefined) quotation.quoteTitle = quoteTitle;
     if (quoteDescription !== undefined)
       quotation.quoteDescription = quoteDescription;
+    if (quoteNote !== undefined)
+      quotation.quoteNote = quoteNote;
     if (packages !== undefined) quotation.packages = packages;
     if (installments !== undefined) quotation.installments = installments;
     if (totalAmount !== undefined) quotation.totalAmount = totalAmount;
@@ -372,188 +377,188 @@ exports.toggleFinalizedQuotation = async (req, res) => {
 };
 
 // PUT /api/quotations/:quotationId/installment/:installmentId
-exports.updateInstallmentStatus = async (req, res) => {
-  try {
-    const { quotationId, installmentId } = req.params;
-    const { dueDate, paymentMode, paymentPercentage, paymentAmount, status } =
-      req.body;
+// exports.updateInstallmentStatus = async (req, res) => {
+//   try {
+//     const { quotationId, installmentId } = req.params;
+//     const { dueDate, paymentMode, paymentPercentage, paymentAmount, status } =
+//       req.body;
 
-    const quotation = await Quotation.findById(quotationId);
-    if (!quotation) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Quotation not found" });
-    }
+//     const quotation = await Quotation.findById(quotationId);
+//     if (!quotation) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Quotation not found" });
+//     }
 
-    if (installmentId !== "new") {
-      const installment = quotation.installments.find(
-        (inst) => String(inst._id) === String(installmentId)
-      );
-      if (!installment) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Installment not found" });
-      }
+//     if (installmentId !== "new") {
+//       const installment = quotation.installments.find(
+//         (inst) => String(inst._id) === String(installmentId)
+//       );
+//       if (!installment) {
+//         return res
+//           .status(404)
+//           .json({ success: false, message: "Installment not found" });
+//       }
 
-      // Update fields from request
-      if (dueDate !== undefined) installment.dueDate = dueDate;
-      if (paymentMode !== undefined) installment.paymentMode = paymentMode;
-      if (paymentPercentage !== undefined)
-        installment.paymentPercentage = paymentPercentage;
-      if (status !== undefined) installment.status = status;
+//       // Update fields from request
+//       if (dueDate !== undefined) installment.dueDate = dueDate;
+//       if (paymentMode !== undefined) installment.paymentMode = paymentMode;
+//       if (paymentPercentage !== undefined)
+//         installment.paymentPercentage = paymentPercentage;
+//       if (status !== undefined) installment.status = status;
 
-      if (paymentAmount !== undefined) {
-        installment.paymentAmount = paymentAmount;
-        // Update paid/pending amounts based on the status from frontend
-        if (status === "Completed") {
-          installment.paidAmount = paymentAmount;
-          installment.pendingAmount = 0;
-        } else if (status === "Partial Paid") {
-          // For partial payments, maintain existing paidAmount or set to paymentAmount
-          installment.paidAmount = installment.paidAmount || paymentAmount;
-          installment.pendingAmount = paymentAmount - installment.paidAmount;
-        } else {
-          // Pending status
-          installment.paidAmount = 0;
-          installment.pendingAmount = paymentAmount;
-        }
-      }
+//       if (paymentAmount !== undefined) {
+//         installment.paymentAmount = paymentAmount;
+//         // Update paid/pending amounts based on the status from frontend
+//         if (status === "Completed") {
+//           installment.paidAmount = paymentAmount;
+//           installment.pendingAmount = 0;
+//         } else if (status === "Partial Paid") {
+//           // For partial payments, maintain existing paidAmount or set to paymentAmount
+//           installment.paidAmount = installment.paidAmount || paymentAmount;
+//           installment.pendingAmount = paymentAmount - installment.paidAmount;
+//         } else {
+//           // Pending status
+//           installment.paidAmount = 0;
+//           installment.pendingAmount = paymentAmount;
+//         }
+//       }
 
-      // business rule for first installment
-      const firstInstallment = quotation.installments[0];
-      if (
-        firstInstallment &&
-        String(firstInstallment._id) === String(installmentId) &&
-        installment.status === "Completed"
-      ) {
-        quotation.bookingStatus = "Booked";
-        if (quotation.queryId) {
-          await Query.findOneAndUpdate(
-            { _id: quotation.queryId },
-            { status: "Booked" }
-          );
-        }
-      }
-    } else {
-      // For new installment, use status from frontend or default to Pending
-      const newStatus = status || "Pending";
-      const planned = paymentAmount ?? 0;
+//       // business rule for first installment
+//       const firstInstallment = quotation.installments[0];
+//       if (
+//         firstInstallment &&
+//         String(firstInstallment._id) === String(installmentId) &&
+//         installment.status === "Completed"
+//       ) {
+//         quotation.bookingStatus = "Booked";
+//         if (quotation.queryId) {
+//           await Query.findOneAndUpdate(
+//             { _id: quotation.queryId },
+//             { status: "Booked" }
+//           );
+//         }
+//       }
+//     } else {
+//       // For new installment, use status from frontend or default to Pending
+//       const newStatus = status || "Pending";
+//       const planned = paymentAmount ?? 0;
 
-      quotation.installments.push({
-        dueDate,
-        paymentMode,
-        paymentPercentage,
-        paymentAmount: planned,
-        paidAmount: newStatus === "Completed" ? planned : 0,
-        pendingAmount: newStatus === "Completed" ? 0 : planned,
-        status: newStatus,
-      });
-    }
+//       quotation.installments.push({
+//         dueDate,
+//         paymentMode,
+//         paymentPercentage,
+//         paymentAmount: planned,
+//         paidAmount: newStatus === "Completed" ? planned : 0,
+//         pendingAmount: newStatus === "Completed" ? 0 : planned,
+//         status: newStatus,
+//       });
+//     }
 
-    await quotation.save();
-    return res.status(200).json({ success: true, quotation });
-  } catch (error) {
-    console.error("Error updating/creating installment:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update/create installment",
-      error: error.message,
-    });
-  }
-};
+//     await quotation.save();
+//     return res.status(200).json({ success: true, quotation });
+//   } catch (error) {
+//     console.error("Error updating/creating installment:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to update/create installment",
+//       error: error.message,
+//     });
+//   }
+// };
 
-exports.updateInstallmentFirstPayment = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+// exports.updateInstallmentFirstPayment = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
 
-  try {
-    const { quotationId, installmentId } = req.params;
-    const { dueDate, paymentMode, paymentAmount, status } = req.body;
+//   try {
+//     const { quotationId, installmentId } = req.params;
+//     const { dueDate, paymentMode, paymentAmount, status } = req.body;
 
-    const allowed = ["Pending", "Partial Paid", "Completed"];
-    if (status && !allowed.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid status. Allowed: ${allowed.join(", ")}`,
-      });
-    }
+//     const allowed = ["Pending", "Partial Paid", "Completed"];
+//     if (status && !allowed.includes(status)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Invalid status. Allowed: ${allowed.join(", ")}`,
+//       });
+//     }
 
-    const filter = mongoose.isValidObjectId(quotationId)
-      ? { _id: quotationId }
-      : { quotationId };
+//     const filter = mongoose.isValidObjectId(quotationId)
+//       ? { _id: quotationId }
+//       : { quotationId };
 
-    // Load quotation in the session
-    const doc = await Quotation.findOne(filter).session(session);
-    if (!doc) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Quotation not found" });
-    }
+//     // Load quotation in the session
+//     const doc = await Quotation.findOne(filter).session(session);
+//     if (!doc) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Quotation not found" });
+//     }
 
-    const inst = doc.installments.id(installmentId);
-    if (!inst) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Installment not found" });
-    }
+//     const inst = doc.installments.id(installmentId);
+//     if (!inst) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Installment not found" });
+//     }
 
-    // --- Update the targeted installment ---
-    if (dueDate !== undefined) inst.dueDate = dueDate;
-    if (paymentMode !== undefined) inst.paymentMode = paymentMode;
-    if (status !== undefined) inst.status = status;
+//     // --- Update the targeted installment ---
+//     if (dueDate !== undefined) inst.dueDate = dueDate;
+//     if (paymentMode !== undefined) inst.paymentMode = paymentMode;
+//     if (status !== undefined) inst.status = status;
 
-    const paidNow = Number(paymentAmount ?? inst.paymentAmount ?? 0);
-    inst.paidAmount = paidNow;
-    inst.pendingAmount = 0; // this one is paid
+//     const paidNow = Number(paymentAmount ?? inst.paymentAmount ?? 0);
+//     inst.paidAmount = paidNow;
+//     inst.pendingAmount = 0; // this one is paid
 
-    // --- Other installments: pending = their planned amount (leave paid/status as-is) ---
-    doc.installments.forEach((i) => {
-      if (i._id.toString() !== installmentId) {
-        i.pendingAmount = Number(i.paymentAmount ?? 0);
-      }
-    });
+//     // --- Other installments: pending = their planned amount (leave paid/status as-is) ---
+//     doc.installments.forEach((i) => {
+//       if (i._id.toString() !== installmentId) {
+//         i.pendingAmount = Number(i.paymentAmount ?? 0);
+//       }
+//     });
 
-    // --- NEW: mark booking as Booked (unless already Completed) ---
-    if (doc.bookingStatus !== "Completed") {
-      doc.bookingStatus = "Booked";
-    }
+//     // --- NEW: mark booking as Booked (unless already Completed) ---
+//     if (doc.bookingStatus !== "Completed") {
+//       doc.bookingStatus = "Booked";
+//     }
 
-    await doc.save({ session });
+//     await doc.save({ session });
 
-    // --- NEW: also mark the related Query's status as Booked ---
-    if (doc.queryId) {
-      await Query.findByIdAndUpdate(
-        doc.queryId,
-        { $set: { status: "Booked" } },
-        { session }
-      );
-    }
+//     // --- NEW: also mark the related Query's status as Booked ---
+//     if (doc.queryId) {
+//       await Query.findByIdAndUpdate(
+//         doc.queryId,
+//         { $set: { status: "Booked" } },
+//         { session }
+//       );
+//     }
 
-    await session.commitTransaction();
-    session.endSession();
+//     await session.commitTransaction();
+//     session.endSession();
 
-    return res.json({
-      success: true,
-      message:
-        "First payment recorded; booking & query marked as Booked; other installments pending set to their paymentAmount.",
-      data: {
-        quotationId: doc._id,
-        updatedInstallment: doc.installments.id(installmentId),
-        installments: doc.installments,
-        bookingStatus: doc.bookingStatus,
-      },
-    });
-  } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
-    console.error("updateInstallmentFirstPayment error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to record first payment",
-      error: err.message,
-    });
-  }
-};
+//     return res.json({
+//       success: true,
+//       message:
+//         "First payment recorded; booking & query marked as Booked; other installments pending set to their paymentAmount.",
+//       data: {
+//         quotationId: doc._id,
+//         updatedInstallment: doc.installments.id(installmentId),
+//         installments: doc.installments,
+//         bookingStatus: doc.bookingStatus,
+//       },
+//     });
+//   } catch (err) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     console.error("updateInstallmentFirstPayment error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to record first payment",
+//       error: err.message,
+//     });
+//   }
+// };
 
 exports.deleteInstallment = async (req, res) => {
   try {
@@ -668,90 +673,6 @@ function ensureCapacity(arr, len) {
  * Body: { vendorId?: string|null, vendorName?: string }
  * If vendorId is null/undefined => clear at that unit
  */
-// exports.assignVendorToServiceUnit = async (req, res) => {
-//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
-//   const { vendorId, vendorName,  slot, eventStartDate} = req.body;
-
-//   try {
-//     const quotation = await Quotation.findById(quotationId);
-//     if (!quotation)
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Quotation not found" });
-
-//     const pkg = quotation.packages.id(packageId);
-//     if (!pkg)
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Package not found in quotation" });
-
-//     const service = pkg.services.id(serviceId);
-//     if (!service)
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Service not found in package" });
-
-//     const unit = parseInt(unitIndex, 10);
-//     const qty = Math.max(1, service.qty || 1);
-//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
-//       return res
-//         .status(400)
-//         .json({ success: false, message: "Invalid unitIndex" });
-//     }
-
-//     // Grow arrays to match qty for safe indexing
-//     service.assignedVendors = ensureCapacity(service.assignedVendors, qty);
-
-//     // Free previously assigned vendor for this unit (optional: availability)
-//     const old = service.assignedVendors[unit];
-//     if (old?.vendorId) {
-//       // If you track availability globally, consider checking if the old vendor
-//       // is used elsewhere before setting Available.
-//       await Vendor.findByIdAndUpdate(old.vendorId, {
-//         // status: "Available",
-//       }).catch(() => {});
-//     }
-
-//     if (vendorId) {
-//       const ven = await Vendor.findById(vendorId);
-//       if (!ven)
-//         return res
-//           .status(404)
-//           .json({ success: false, message: "Vendor not found" });
-
-//       service.assignedVendors[unit] = {
-//         vendorId: new mongoose.Types.ObjectId(vendorId),
-//         vendorName: vendorName || ven.name,
-//         category: ven.category,
-//       };
-
-//       // Mark new vendor unavailable (if you use this)
-//       await Vendor.findByIdAndUpdate(vendorId, {
-//         status: "Not Available",
-//       }).catch(() => {});
-//     } else {
-//       // Clear vendor
-//       service.assignedVendors[unit] = null;
-//     }
-
-//     await quotation.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: vendorId
-//         ? `Vendor assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
-//         : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
-//       service,
-//     });
-//   } catch (err) {
-//     console.error("assignVendorToServiceUnit error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: err.message,
-//     });
-//   }
-// };
 
 exports.assignVendorToServiceUnit = async (req, res) => {
   const { quotationId, packageId, serviceId, unitIndex } = req.params;
@@ -1294,77 +1215,78 @@ exports.getCompletedInstallments = async (req, res) => {
   }
 };
 
-exports.updateCalculation = async (req, res) => {
-  console.log("req.body calc", req.body);
-  try {
-    const { package: updatedPackage, ...totals } = req.body;
+// exports.updateCalculation = async (req, res) => {
+//   console.log("req.body calc", req.body);
+//   try {
+//     const { package: updatedPackage, ...totals } = req.body;
 
-    // 1. Find the quotation
-    const quotation = await Quotation.findById(req.params.id);
-    if (!quotation) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Quotation not found" });
-    }
+//     // 1. Find the quotation
+//     const quotation = await Quotation.findById(req.params.id);
+//     if (!quotation) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Quotation not found" });
+//     }
 
-    // 2. Update the specific package if provided
-    if (updatedPackage && updatedPackage._id) {
-      const packageIndex = quotation.packages.findIndex(
-        (pkg) => pkg._id.toString() === updatedPackage._id
-      );
+//     // 2. Update the specific package if provided
+//     if (updatedPackage && updatedPackage._id) {
+//       const packageIndex = quotation.packages.findIndex(
+//         (pkg) => pkg._id.toString() === updatedPackage._id
+//       );
 
-      if (packageIndex !== -1) {
-        // Replace the package with the updated one
-        quotation.packages[packageIndex] = updatedPackage;
-      } else {
-        // If package not found but has _id, it might be an error
-        return res.status(400).json({
-          success: false,
-          message: "Package not found in quotation",
-        });
-      }
-    }
+//       if (packageIndex !== -1) {
+//         // Replace the package with the updated one
+//         quotation.packages[packageIndex] = updatedPackage;
+//       } else {
+//         // If package not found but has _id, it might be an error
+//         return res.status(400).json({
+//           success: false,
+//           message: "Package not found in quotation",
+//         });
+//       }
+//     }
 
-    // 3. Update all the calculated totals
-    quotation.totalPackageAmt = totals.totalPackageAmt;
-    quotation.totalAlbumAmount = totals.totalAlbumAmount;
-    quotation.discountValue = totals.discountValue;
-    quotation.gstValue = totals.gstValue;
-    quotation.totalAmount = totals.totalAmount;
-    quotation.grandTotal = totals.grandTotal;
-    quotation.totalMarginFinal = totals.totalMarginFinal;
+//     // 3. Update all the calculated totals
+//     quotation.totalPackageAmt = totals.totalPackageAmt;
+//     quotation.totalAlbumAmount = totals.totalAlbumAmount;
+//     quotation.discountValue = totals.discountValue;
+//     quotation.gstValue = totals.gstValue;
+//     quotation.totalAmount = totals.totalAmount;
+//     quotation.grandTotal = totals.grandTotal;
+//     quotation.totalMarginFinal = totals.totalMarginFinal;
 
-    // 4. Update installments (replace completely)
-    quotation.installments = totals.installments.map((inst) => ({
-      installmentNumber: inst.installmentNumber,
-      dueDate: inst.dueDate,
-      paymentMode: inst.paymentMode,
-      paymentAmount: inst.paymentAmount,
-      paymentPercentage: inst.paymentPercentage,
-      paidAmount: inst.paidAmount,
-      pendingAmount: inst.pendingAmount,
-      status: inst.status,
-      _id: inst._id, // Preserve existing _id
-    }));
+//     // 4. Update installments (replace completely)
+//     quotation.installments = totals.installments.map((inst) => ({
+//       installmentNumber: inst.installmentNumber,
+//       dueDate: inst.dueDate,
+//       paymentMode: inst.paymentMode,
+//       paymentAmount: inst.paymentAmount,
+//       paymentPercentage: inst.paymentPercentage,
+//       paidAmount: inst.paidAmount,
+//       pendingAmount: inst.pendingAmount,
+//       status: inst.status,
+//       _id: inst._id, // Preserve existing _id
+//     }));
 
-    // 5. Save the updated quotation
-    const updatedQuotation = await quotation.save();
+//     // 5. Save the updated quotation
+//     const updatedQuotation = await quotation.save();
 
-    res.json({
-      success: true,
-      quotation: updatedQuotation,
-    });
-  } catch (err) {
-    console.error("Error updating quotation:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update quotation",
-      error: err.message,
-    });
-  }
-};
+//     res.json({
+//       success: true,
+//       quotation: updatedQuotation,
+//     });
+//   } catch (err) {
+//     console.error("Error updating quotation:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to update quotation",
+//       error: err.message,
+//     });
+//   }
+// };
 
 // PUT /api/quotations/:quotationId/installment/:installmentId/payment
+
 exports.recordPayment = async (req, res) => {
   try {
     const { quotationId, installmentId } = req.params;
@@ -1592,3 +1514,313 @@ exports.countCompletedQuotations = async (req, res) => {
     });
   }
 };
+
+
+exports.updateCalculation = async (req, res) => {
+  console.log("req.body calc", req.body);
+  try {
+    const { package: updatedPackage, ...totals } = req.body;
+
+    // 1. Find the quotation
+    const quotation = await Quotation.findById(req.params.id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    // 2. Update the specific package if provided
+    if (updatedPackage && updatedPackage._id) {
+      const packageIndex = quotation.packages.findIndex(
+        (pkg) => pkg._id.toString() === updatedPackage._id
+      );
+
+      if (packageIndex !== -1) {
+        // Replace the package with the updated one
+        quotation.packages[packageIndex] = updatedPackage;
+      } else {
+        // If package not found but has _id, it might be an error
+        return res.status(400).json({
+          success: false,
+          message: "Package not found in quotation",
+        });
+      }
+    }
+
+    // 3. Update all the calculated totals
+    quotation.totalPackageAmt = totals.totalPackageAmt;
+    quotation.totalAlbumAmount = totals.totalAlbumAmount;
+    quotation.discountValue = totals.discountValue;
+    quotation.gstValue = totals.gstValue;
+    quotation.totalAmount = totals.totalAmount;
+    quotation.grandTotal = totals.grandTotal;
+    quotation.totalMarginFinal = totals.totalMarginFinal;
+
+    // 4. Update installments while preserving accountHolders
+    if (totals.installments && Array.isArray(totals.installments)) {
+      // Create a map of existing installments by _id for accountHolders preservation
+      const existingInstallmentsMap = new Map();
+      quotation.installments.forEach(inst => {
+        if (inst._id) {
+          existingInstallmentsMap.set(inst._id.toString(), inst);
+        }
+      });
+
+      // Update installments with financial data but preserve accountHolders
+      quotation.installments = totals.installments.map(newInst => {
+        // For installments with _id, preserve accountHolders from existing installment
+        if (newInst._id) {
+          const existingInst = existingInstallmentsMap.get(newInst._id.toString());
+          if (existingInst) {
+            return {
+              ...newInst,
+              accountHolders: existingInst.accountHolders || [] // Preserve account holders
+            };
+          }
+        }
+        
+        // For new installments or those without matching existing ones
+        return {
+          ...newInst,
+          accountHolders: newInst.accountHolders || [] // Use provided or empty array
+        };
+      });
+    }
+
+    // 5. Save the updated quotation
+    const updatedQuotation = await quotation.save();
+
+    res.json({
+      success: true,
+      quotation: updatedQuotation,
+    });
+  } catch (err) {
+    console.error("Error updating quotation:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update quotation",
+      error: err.message,
+    });
+  }
+};
+
+exports.updateInstallmentStatus = async (req, res) => {
+  try {
+    const { quotationId, installmentId } = req.params;
+    const { dueDate, paymentMode, paymentPercentage, paymentAmount, status, accountHolders } =
+      req.body;
+
+    const quotation = await Quotation.findById(quotationId);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    if (installmentId !== "new") {
+      const installment = quotation.installments.find(
+        (inst) => String(inst._id) === String(installmentId)
+      );
+      if (!installment) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Installment not found" });
+      }
+
+      // Update fields from request
+      if (dueDate !== undefined) installment.dueDate = dueDate;
+      if (paymentMode !== undefined) installment.paymentMode = paymentMode;
+      if (paymentPercentage !== undefined)
+        installment.paymentPercentage = paymentPercentage;
+      if (status !== undefined) installment.status = status;
+
+      // ✅ Handle account holders - prevent duplicates
+      if (accountHolders && Array.isArray(accountHolders)) {
+        const newHolders = accountHolders.map((h) => ({ name: h.name }));
+        
+        // Merge with existing holders, avoiding duplicates
+        const existingHolderNames = new Set((installment.accountHolders || []).map(h => h.name.toLowerCase()));
+        const uniqueNewHolders = newHolders.filter(h => !existingHolderNames.has(h.name.toLowerCase()));
+        
+        installment.accountHolders = [
+          ...(installment.accountHolders || []),
+          ...uniqueNewHolders,
+        ];
+      }
+
+      if (paymentAmount !== undefined) {
+        installment.paymentAmount = paymentAmount;
+        // Update paid/pending amounts based on the status from frontend
+        if (status === "Completed") {
+          installment.paidAmount = paymentAmount;
+          installment.pendingAmount = 0;
+        } else if (status === "Partial Paid") {
+          // For partial payments, maintain existing paidAmount or set to paymentAmount
+          installment.paidAmount = installment.paidAmount || paymentAmount;
+          installment.pendingAmount = paymentAmount - installment.paidAmount;
+        } else {
+          // Pending status
+          installment.paidAmount = 0;
+          installment.pendingAmount = paymentAmount;
+        }
+      }
+
+      // business rule for first installment
+      const firstInstallment = quotation.installments[0];
+      if (
+        firstInstallment &&
+        String(firstInstallment._id) === String(installmentId) &&
+        installment.status === "Completed"
+      ) {
+        quotation.bookingStatus = "Booked";
+        if (quotation.queryId) {
+          await Query.findOneAndUpdate(
+            { _id: quotation.queryId },
+            { status: "Booked" }
+          );
+        }
+      }
+    } else {
+      // For new installment, use status from frontend or default to Pending
+      const newStatus = status || "Pending";
+      const planned = paymentAmount ?? 0;
+
+      // ✅ Handle account holders for new installment - remove duplicates
+      const accountHoldersData = accountHolders && Array.isArray(accountHolders)
+        ? accountHolders.map((h) => ({ name: h.name }))
+        : [];
+
+      // Remove duplicate names
+      const uniqueHolders = [];
+      const seenNames = new Set();
+      
+      accountHoldersData.forEach(holder => {
+        if (!seenNames.has(holder.name.toLowerCase())) {
+          seenNames.add(holder.name.toLowerCase());
+          uniqueHolders.push(holder);
+        }
+      });
+
+      quotation.installments.push({
+        dueDate,
+        paymentMode,
+        paymentPercentage,
+        paymentAmount: planned,
+        paidAmount: newStatus === "Completed" ? planned : 0,
+        pendingAmount: newStatus === "Completed" ? 0 : planned,
+        status: newStatus,
+        accountHolders: uniqueHolders, // ✅ Add unique account holders
+      });
+    }
+
+    await quotation.save();
+    return res.status(200).json({ success: true, quotation });
+  } catch (error) {
+    console.error("Error updating/creating installment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update/create installment",
+      error: error.message,
+    });
+  }
+};
+
+exports.updateInstallmentFirstPayment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { quotationId, installmentId } = req.params;
+    const { dueDate, paymentMode, paymentAmount, status, accountHolders } = req.body;
+
+    const allowed = ["Pending", "Partial Paid", "Completed"];
+    if (status && !allowed.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Allowed: ${allowed.join(", ")}`,
+      });
+    }
+
+    const filter = mongoose.isValidObjectId(quotationId)
+      ? { _id: quotationId }
+      : { quotationId };
+
+    const doc = await Quotation.findOne(filter).session(session);
+    if (!doc) {
+      return res.status(404).json({ success: false, message: "Quotation not found" });
+    }
+
+    const inst = doc.installments.id(installmentId);
+    if (!inst) {
+      return res.status(404).json({ success: false, message: "Installment not found" });
+    }
+
+    // ✅ Update basic fields
+    if (dueDate !== undefined) inst.dueDate = dueDate;
+    if (paymentMode !== undefined) inst.paymentMode = paymentMode;
+    if (status !== undefined) inst.status = status;
+
+    // ✅ Update payment tracking
+    const paidNow = Number(paymentAmount ?? inst.paymentAmount ?? 0);
+    inst.paidAmount = paidNow;
+    inst.pendingAmount = Math.max(0, (inst.paymentAmount || 0) - paidNow);
+
+    // ✅ Merge account holders but only keep names (strip amount)
+    if (accountHolders && Array.isArray(accountHolders)) {
+      inst.accountHolders = [
+        ...(inst.accountHolders || []),
+        ...accountHolders.map((h) => ({ name: h.name })),
+      ];
+    }
+
+    // ✅ Mark all other installments as pending with full amount
+    doc.installments.forEach((i) => {
+      if (i._id.toString() !== installmentId) {
+        i.paidAmount = 0;
+        i.pendingAmount = Number(i.paymentAmount ?? 0);
+        i.status = "Pending";
+      }
+    });
+
+    // ✅ Update booking status
+    if (doc.bookingStatus !== "Completed") {
+      doc.bookingStatus = "Booked";
+    }
+
+    await doc.save({ session });
+
+    // ✅ Update linked Query as Booked if exists
+    if (doc.queryId) {
+      await Query.findByIdAndUpdate(
+        doc.queryId,
+        { $set: { status: "Booked" } },
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      success: true,
+      message:
+        "First payment recorded; booking marked as Booked; other installments set to pending.",
+      data: {
+        quotationId: doc._id,
+        updatedInstallment: doc.installments.id(installmentId),
+        installments: doc.installments,
+        bookingStatus: doc.bookingStatus,
+      },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("updateInstallmentFirstPayment error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to record first payment",
+      error: err.message,
+    });
+  }
+};
+

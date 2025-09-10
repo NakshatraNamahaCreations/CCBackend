@@ -14,6 +14,9 @@ const {
   getCreatedQueriesCount,
   getQueryWithStatus,
   getCallLaterQueriesbyDate,
+  getQueriesbyEventstartDate,
+  updateInstahandle,
+  getTodayRescheduledCalls
 } = require("../Controllers/leadController");
 
 // Route to create a new lead
@@ -28,6 +31,7 @@ router.get("/paginated", getAllQueriesPaginated);
 
 router.get("/status/:status", getQueryWithStatus);
 router.get("/call-later-by-date", getCallLaterQueriesbyDate);
+router.get('/event-date/:startDate', getQueriesbyEventstartDate)
 
 // Search leads by phone number
 router.get("/searchByPhone", searchLeadByPhoneNo);
@@ -38,10 +42,11 @@ router.get("/searchByPhonePrefix", searchLeadByPhonePrefix);
 // router.get("/with-created-queries", getLeadsWithCreatedQueries);
 router.get("/lead-details/:leadId/:queryId", getLeadWithSpecificQuery);
 router.get("/count", getCreatedQueriesCount);
-
+router.get("/queries/rescheduled/today", getTodayRescheduledCalls);
 router.get("/lead-query-details/:leadId/:queryId", getLeadQueryDetails);
 router.put("/:leadId/update-query/:queryId", updateLeadQueryDetails);
 
 router.put("/:queryId/status", updateQueryStatus);
+router.put("/:leadId/person/:personId/insta-handle",updateInstahandle)
 
 module.exports = router;

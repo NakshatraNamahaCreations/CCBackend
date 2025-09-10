@@ -289,7 +289,6 @@ const PackageSchema = new mongoose.Schema(
   { _id: true }
 );
 
-
 const InstallmentSchema = new mongoose.Schema(
   {
     installmentNumber: Number,
@@ -299,31 +298,40 @@ const InstallmentSchema = new mongoose.Schema(
     paymentPercentage: Number,
     paidAmount: {
       type: Number,
-      default: 0
+      default: 0,
     },
     pendingAmount: {
       type: Number,
-      default: 0
+      default: 0,
     },
     status: {
       type: String,
       enum: ["Pending", "Partial Paid", "Completed"],
       default: "Pending",
     },
+    // NEW: store multiple account holders with their paid amounts
+    accountHolders: [
+      {
+        name: String,
+      },
+    ],
   },
   { _id: true }
 );
 
-const FollowUpHistorySchema = new mongoose.Schema({
-  date: { type: Date, default: Date.now },
-  status: {
+const FollowUpHistorySchema = new mongoose.Schema(
+  {
+    date: { type: Date, default: Date.now },
+    status: {
       type: String,
-      enum: ['Pending', 'Contacted', 'Payment Received'],
-      default: 'Pending'
+      enum: ["Pending", "Contacted", "Payment Received"],
+      default: "Pending",
+    },
+    notes: String,
+    contactedBy: String,
   },
-  notes: String,
-  contactedBy: String
-}, { _id: true });
+  { _id: true }
+);
 
 const QuotationSchema = new mongoose.Schema(
   {
@@ -342,7 +350,7 @@ const QuotationSchema = new mongoose.Schema(
     quoteTitle: String,
     quoteDescription: String,
     invoiceNumber: { type: String, unique: true, sparse: true },
-
+    quoteNote: String,
     packages: { type: [PackageSchema], default: [] },
     installments: { type: [InstallmentSchema], default: [] },
     totalPackageAmt: Number,
@@ -370,7 +378,7 @@ const QuotationSchema = new mongoose.Schema(
     // ✅ albums embedded here
     albums: { type: [AlbumSchema], default: [] },
 
-    followUpHistory: { type: [FollowUpHistorySchema], default: [] }
+    followUpHistory: { type: [FollowUpHistorySchema], default: [] },
   },
   { timestamps: true }
 );

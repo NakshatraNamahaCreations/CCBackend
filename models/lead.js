@@ -10,7 +10,7 @@ const leadSchema = new mongoose.Schema(
         whatsappNo: { type: String },
         email: { type: String },
         profession: { type: String },
-        instaHandle: { type: String },
+        instagramHandle: { type: String },
       },
     ],
     referenceForm: { type: String },
