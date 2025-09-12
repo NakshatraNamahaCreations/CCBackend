@@ -23,6 +23,7 @@ router.put('/:id', vendorCtrl.updateVendor);
 // Delete Vendor
 router.delete('/:id', vendorCtrl.deleteVendor);
 router.get('/inhouse', vendorCtrl.getAvailableInhouseVendors);
+router.get('/vendor-payments', vendorCtrl.vendorPayment);
 
 module.exports = router;
 

@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const Vendor = require("../models/vendor.model");
 const VendorInventory  = require("../models/vendorInventory")
+const dayjs = require("dayjs");  
+const Quotation = require("../models/quotation.model");
+
 // Create Vendor
 exports.createVendor = async (req, res) => {
   try {
@@ -213,16 +216,26 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
       });
     }
 
-    // Get all vendor IDs that are booked on the specified date AND slot
-    const bookedVendorIds = await VendorInventory.find({
+    // Step 1: Fetch all vendors whose specialization.name matches the serviceName
+    const allVendors = await Vendor.find({
+      "specialization.name": { $regex: new RegExp(serviceName, "i") } // Case-insensitive search
+    });
+
+    // Step 2: Fetch all vendorInventory records for the given date and slot
+    const vendorInventoryRecords = await VendorInventory.find({
       date: date,
       slot: slot
-    }).distinct("vendorId");
+    });
 
-    // Fetch vendors that provide the specified service AND are not booked for this date & slot
-    const availableVendors = await Vendor.find({
-      "specialization.name": { $regex: new RegExp(serviceName, "i") }, // Case-insensitive search
-      _id: { $nin: bookedVendorIds }
+    // Step 3: Map through all vendors and check availability
+    const availableVendors = allVendors.filter(vendor => {
+      // Check if vendor ID exists in inventory records
+      const isBooked = vendorInventoryRecords.some(inventory => 
+        inventory.vendorId.toString() === vendor._id.toString()
+      );
+      
+      // Return true if vendor is NOT booked (available)
+      return !isBooked;
     });
 
     return res.status(200).json({
@@ -230,6 +243,7 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
       data: {
         availableVendors,
         totalAvailable: availableVendors.length,
+        totalVendorsForService: allVendors.length,
         serviceName,
         date,
         slot
@@ -366,3 +380,74 @@ exports.getAvailableInhouseVendors = async (req, res) => {
     data: vendors,
   });
 };
+
+
+exports.vendorPayment = async (req, res) => {
+  try {
+    const today = dayjs().format("YYYY-MM-DD");
+
+    // 1. Fetch quotations except those with bookingStatus = NotBooked
+    const quotations = await Quotation.find({
+      bookingStatus: { $ne: "NotBooked" }
+    }).lean();
+
+    // 2. Fetch all vendors once and index them
+    const vendors = await Vendor.find().lean();
+    const vendorMap = {};
+    for (const v of vendors) {
+      vendorMap[v._id.toString()] = v;
+    }
+
+    // 3. Payments store
+    const vendorPayments = {};
+
+    // 4. Process quotations
+    for (const quotation of quotations) {
+      for (const pkg of quotation.packages) {
+        if (dayjs(pkg.eventStartDate).isBefore(today)) {
+          for (const service of pkg.services) {
+            for (const vendor of service.assignedVendors) {
+              if (!vendor) continue;
+
+              const vendorDoc = vendorMap[vendor.vendorId.toString()];
+              if (!vendorDoc) continue;
+
+              // Match specialization salary
+              const specialization = vendorDoc.specialization.find(
+                (s) => s.name === service.serviceName
+              );
+
+              if (specialization?.salary) {
+                if (!vendorPayments[vendor.vendorId]) {
+                  vendorPayments[vendor.vendorId] = {
+                    vendorName: vendor.vendorName,
+                    totalSalary: 0,
+                    events: []
+                  };
+                }
+         
+
+                vendorPayments[vendor.vendorId].totalSalary += specialization.salary;
+                vendorPayments[vendor.vendorId].events.push({
+                  quoteId: quotation.quotationId,
+                  quotationId: quotation._id,
+                  serviceName: service.serviceName,
+                  eventDate: pkg.eventStartDate,
+                  slot: pkg.slot,
+                  salary: specialization.salary
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return res.json({ success: true, data: vendorPayments });
+  } catch (err) {
+    console.error("Error calculating vendor payments:", err);
+    return res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+
