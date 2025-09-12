@@ -4,7 +4,7 @@ const Query = require("../models/query");
 const mongoose = require("mongoose");
 const dayjs = require("dayjs");
 const moment = require("moment");
-const VendorInventory = require("../models/vendorInventory")
+const VendorInventory = require("../models/vendorInventory");
 // Generate next quotationId like "QN0001"
 async function generateQuotationId() {
   const latestQuotation = await Quotation.findOne({})
@@ -43,7 +43,7 @@ exports.createQuotation = async (req, res) => {
       queryId,
       quoteTitle = "",
       quoteDescription = "",
-      quoteNote="",
+      quoteNote = "",
       packages = [],
       installments = [],
       totalAmount = 0,
@@ -173,8 +173,7 @@ exports.updateQuotation = async (req, res) => {
     if (quoteTitle !== undefined) quotation.quoteTitle = quoteTitle;
     if (quoteDescription !== undefined)
       quotation.quoteDescription = quoteDescription;
-    if (quoteNote !== undefined)
-      quotation.quoteNote = quoteNote;
+    if (quoteNote !== undefined) quotation.quoteNote = quoteNote;
     if (packages !== undefined) quotation.packages = packages;
     if (installments !== undefined) quotation.installments = installments;
     if (totalAmount !== undefined) quotation.totalAmount = totalAmount;
@@ -681,35 +680,35 @@ exports.assignVendorToServiceUnit = async (req, res) => {
   try {
     const quotation = await Quotation.findById(quotationId);
     if (!quotation) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Quotation not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
       });
     }
 
     const pkg = quotation.packages.id(packageId);
     if (!pkg) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Package not found in quotation" 
+      return res.status(404).json({
+        success: false,
+        message: "Package not found in quotation",
       });
     }
 
     const service = pkg.services.id(serviceId);
     if (!service) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Service not found in package" 
+      return res.status(404).json({
+        success: false,
+        message: "Service not found in package",
       });
     }
 
     const unit = parseInt(unitIndex, 10);
     const qty = Math.max(1, service.qty || 1);
-    
+
     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid unitIndex" 
+      return res.status(400).json({
+        success: false,
+        message: "Invalid unitIndex",
       });
     }
 
@@ -717,7 +716,8 @@ exports.assignVendorToServiceUnit = async (req, res) => {
     if (vendorId && (!vendorName || !slot || !eventStartDate)) {
       return res.status(400).json({
         success: false,
-        message: "vendorName, slot, and eventStartDate are required when assigning a vendor"
+        message:
+          "vendorName, slot, and eventStartDate are required when assigning a vendor",
       });
     }
 
@@ -734,9 +734,9 @@ exports.assignVendorToServiceUnit = async (req, res) => {
         slot: slot,
         quotationId: quotationId,
         serviceId: serviceId,
-        unitIndex: unit
+        unitIndex: unit,
       }).catch(console.error);
-      
+
       // Update vendor status back to available
       await Vendor.findByIdAndUpdate(previousAssignment.vendorId, {
         status: "Available",
@@ -746,9 +746,9 @@ exports.assignVendorToServiceUnit = async (req, res) => {
     if (vendorId) {
       const vendor = await Vendor.findById(vendorId);
       if (!vendor) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Vendor not found" 
+        return res.status(404).json({
+          success: false,
+          message: "Vendor not found",
         });
       }
 
@@ -759,13 +759,13 @@ exports.assignVendorToServiceUnit = async (req, res) => {
       const existingBooking = await VendorInventory.findOne({
         vendorId: vendorId,
         date: eventStartDate,
-        slot: slot
+        slot: slot,
       });
 
       if (existingBooking) {
         return res.status(400).json({
           success: false,
-          message: `Vendor ${finalVendorName} is already booked for ${eventStartDate} (${slot} slot)`
+          message: `Vendor ${finalVendorName} is already booked for ${eventStartDate} (${slot} slot)`,
         });
       }
 
@@ -774,13 +774,13 @@ exports.assignVendorToServiceUnit = async (req, res) => {
         // Additional check to see if they're available for this specific date
         const otherBookings = await VendorInventory.find({
           vendorId: vendorId,
-          date: eventStartDate
+          date: eventStartDate,
         });
-        
+
         if (otherBookings.length > 0) {
           return res.status(400).json({
             success: false,
-            message: `Vendor ${finalVendorName} is not available on ${eventStartDate}`
+            message: `Vendor ${finalVendorName} is not available on ${eventStartDate}`,
           });
         }
       }
@@ -792,7 +792,7 @@ exports.assignVendorToServiceUnit = async (req, res) => {
         category: vendor.category,
         assignedDate: new Date(),
         slot: slot,
-        eventDate: eventStartDate
+        eventDate: eventStartDate,
       };
 
       // Add vendor to inventory with all relevant information
@@ -807,16 +807,15 @@ exports.assignVendorToServiceUnit = async (req, res) => {
         serviceId: serviceId,
         serviceName: service.serviceName,
         unitIndex: unit,
-        status: "Booked"
+        status: "Booked",
       });
-      
+
       await vendorInventoryEntry.save();
 
       // Update vendor status
       await Vendor.findByIdAndUpdate(vendorId, {
         status: "Not Available",
       }).catch(console.error);
-
     } else {
       // Clear vendor assignment
       service.assignedVendors[unit] = null;
@@ -827,17 +826,18 @@ exports.assignVendorToServiceUnit = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: vendorId
-        ? `Vendor ${vendorName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+        ? `Vendor ${vendorName} assigned to ${service.serviceName} (unit ${
+            unit + 1
+          }/${qty})`
         : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
       service: service.toObject ? service.toObject() : service,
     });
-
   } catch (err) {
     console.error("assignVendorToServiceUnit error:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
 };
@@ -1369,7 +1369,8 @@ exports.updateBookingStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const finalStatus = status ?? "Completed";
+    // const finalStatus = status ?? "Completed";
+    const finalStatus = status ?? "Booked";
     const allowed = ["NotBooked", "Booked", "Completed"];
     if (!allowed.includes(finalStatus)) {
       return res.status(400).json({
@@ -1515,7 +1516,6 @@ exports.countCompletedQuotations = async (req, res) => {
   }
 };
 
-
 exports.updateCalculation = async (req, res) => {
   console.log("req.body calc", req.body);
   try {
@@ -1560,29 +1560,31 @@ exports.updateCalculation = async (req, res) => {
     if (totals.installments && Array.isArray(totals.installments)) {
       // Create a map of existing installments by _id for accountHolders preservation
       const existingInstallmentsMap = new Map();
-      quotation.installments.forEach(inst => {
+      quotation.installments.forEach((inst) => {
         if (inst._id) {
           existingInstallmentsMap.set(inst._id.toString(), inst);
         }
       });
 
       // Update installments with financial data but preserve accountHolders
-      quotation.installments = totals.installments.map(newInst => {
+      quotation.installments = totals.installments.map((newInst) => {
         // For installments with _id, preserve accountHolders from existing installment
         if (newInst._id) {
-          const existingInst = existingInstallmentsMap.get(newInst._id.toString());
+          const existingInst = existingInstallmentsMap.get(
+            newInst._id.toString()
+          );
           if (existingInst) {
             return {
               ...newInst,
-              accountHolders: existingInst.accountHolders || [] // Preserve account holders
+              accountHolders: existingInst.accountHolders || [], // Preserve account holders
             };
           }
         }
-        
+
         // For new installments or those without matching existing ones
         return {
           ...newInst,
-          accountHolders: newInst.accountHolders || [] // Use provided or empty array
+          accountHolders: newInst.accountHolders || [], // Use provided or empty array
         };
       });
     }
@@ -1607,8 +1609,14 @@ exports.updateCalculation = async (req, res) => {
 exports.updateInstallmentStatus = async (req, res) => {
   try {
     const { quotationId, installmentId } = req.params;
-    const { dueDate, paymentMode, paymentPercentage, paymentAmount, status, accountHolders } =
-      req.body;
+    const {
+      dueDate,
+      paymentMode,
+      paymentPercentage,
+      paymentAmount,
+      status,
+      accountHolders,
+    } = req.body;
 
     const quotation = await Quotation.findById(quotationId);
     if (!quotation) {
@@ -1637,11 +1645,15 @@ exports.updateInstallmentStatus = async (req, res) => {
       // ✅ Handle account holders - prevent duplicates
       if (accountHolders && Array.isArray(accountHolders)) {
         const newHolders = accountHolders.map((h) => ({ name: h.name }));
-        
+
         // Merge with existing holders, avoiding duplicates
-        const existingHolderNames = new Set((installment.accountHolders || []).map(h => h.name.toLowerCase()));
-        const uniqueNewHolders = newHolders.filter(h => !existingHolderNames.has(h.name.toLowerCase()));
-        
+        const existingHolderNames = new Set(
+          (installment.accountHolders || []).map((h) => h.name.toLowerCase())
+        );
+        const uniqueNewHolders = newHolders.filter(
+          (h) => !existingHolderNames.has(h.name.toLowerCase())
+        );
+
         installment.accountHolders = [
           ...(installment.accountHolders || []),
           ...uniqueNewHolders,
@@ -1686,15 +1698,16 @@ exports.updateInstallmentStatus = async (req, res) => {
       const planned = paymentAmount ?? 0;
 
       // ✅ Handle account holders for new installment - remove duplicates
-      const accountHoldersData = accountHolders && Array.isArray(accountHolders)
-        ? accountHolders.map((h) => ({ name: h.name }))
-        : [];
+      const accountHoldersData =
+        accountHolders && Array.isArray(accountHolders)
+          ? accountHolders.map((h) => ({ name: h.name }))
+          : [];
 
       // Remove duplicate names
       const uniqueHolders = [];
       const seenNames = new Set();
-      
-      accountHoldersData.forEach(holder => {
+
+      accountHoldersData.forEach((holder) => {
         if (!seenNames.has(holder.name.toLowerCase())) {
           seenNames.add(holder.name.toLowerCase());
           uniqueHolders.push(holder);
@@ -1731,7 +1744,8 @@ exports.updateInstallmentFirstPayment = async (req, res) => {
 
   try {
     const { quotationId, installmentId } = req.params;
-    const { dueDate, paymentMode, paymentAmount, status, accountHolders } = req.body;
+    const { dueDate, paymentMode, paymentAmount, status, accountHolders } =
+      req.body;
 
     const allowed = ["Pending", "Partial Paid", "Completed"];
     if (status && !allowed.includes(status)) {
@@ -1747,12 +1761,16 @@ exports.updateInstallmentFirstPayment = async (req, res) => {
 
     const doc = await Quotation.findOne(filter).session(session);
     if (!doc) {
-      return res.status(404).json({ success: false, message: "Quotation not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
     }
 
     const inst = doc.installments.id(installmentId);
     if (!inst) {
-      return res.status(404).json({ success: false, message: "Installment not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Installment not found" });
     }
 
     // ✅ Update basic fields
@@ -1823,4 +1841,3 @@ exports.updateInstallmentFirstPayment = async (req, res) => {
     });
   }
 };
-

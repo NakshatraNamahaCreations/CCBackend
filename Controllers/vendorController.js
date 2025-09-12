@@ -28,7 +28,6 @@ exports.getAllVendors = async (req, res) => {
         { contactPerson: searchRegex },
         { phoneNo: searchRegex },
         { email: searchRegex },
-        { category: searchRegex },
       ],
     };
 
@@ -135,10 +134,62 @@ exports.getVendorsByServiceName = async (req, res) => {
 };
 
 // API to fetch available vendors for specific date and service name
+// exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
+//   try {
+//     const { serviceName } = req.params;
+//     const { date } = req.query;
+
+//     // Validate required parameters
+//     if (!serviceName) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Service name parameter is required"
+//       });
+//     }
+
+//     if (!date) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Date query parameter is required"
+//       });
+//     }
+
+//     // Get all vendor IDs that are booked on the specified date
+//     const bookedVendorIds = await VendorInventory.find({ date: date })
+//       .distinct('vendorId');
+
+//     // Fetch vendors that provide the specified service AND are not booked on the date
+//     const availableVendors = await Vendor.find({
+//       'services.name': { $regex: new RegExp(serviceName, 'i') }, // Case-insensitive search
+//       _id: { $nin: bookedVendorIds }
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       data: {
+//         availableVendors,
+//         totalAvailable: availableVendors.length,
+//         serviceName: serviceName,
+//         date: date
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("getAvailableVendorsByServiceAndDate error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: err.message
+//     });
+//   }
+// };
+
+
+// API to fetch available vendors for specific date and service name
 exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
   try {
     const { serviceName } = req.params;
-    const { date } = req.query;
+    const { date, slot } = req.query;
 
     // Validate required parameters
     if (!serviceName) {
@@ -155,13 +206,22 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
       });
     }
 
-    // Get all vendor IDs that are booked on the specified date
-    const bookedVendorIds = await VendorInventory.find({ date: date })
-      .distinct('vendorId');
+    if (!slot) {
+      return res.status(400).json({
+        success: false,
+        message: "Slot query parameter is required"
+      });
+    }
 
-    // Fetch vendors that provide the specified service AND are not booked on the date
+    // Get all vendor IDs that are booked on the specified date AND slot
+    const bookedVendorIds = await VendorInventory.find({
+      date: date,
+      slot: slot
+    }).distinct("vendorId");
+
+    // Fetch vendors that provide the specified service AND are not booked for this date & slot
     const availableVendors = await Vendor.find({
-      'services.name': { $regex: new RegExp(serviceName, 'i') }, // Case-insensitive search
+      "specialization.name": { $regex: new RegExp(serviceName, "i") }, // Case-insensitive search
       _id: { $nin: bookedVendorIds }
     });
 
@@ -170,11 +230,11 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
       data: {
         availableVendors,
         totalAvailable: availableVendors.length,
-        serviceName: serviceName,
-        date: date
+        serviceName,
+        date,
+        slot
       }
     });
-
   } catch (err) {
     console.error("getAvailableVendorsByServiceAndDate error:", err);
     return res.status(500).json({
@@ -185,27 +245,92 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
   }
 };
 
+
 // Update Vendor
+// exports.updateVendor = async (req, res) => {
+//   try {
+//     const updatedVendor = await Vendor.findByIdAndUpdate(
+//       req.params.id,
+//       req.body,
+//       {
+//         new: true,
+//         runValidators: true,
+//       }
+//     );
+//     if (!updatedVendor)
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Vendor not found" });
+//     res.status(200).json({ success: true, vendor: updatedVendor });
+//   } catch (error) {
+//     console.error("Update Vendor Error:", error);
+//     res
+//       .status(500)
+//       .json({ success: false, message: "Failed to update vendor", error });
+//   }
+// };
+
+// Update Vendor Details
 exports.updateVendor = async (req, res) => {
   try {
-    const updatedVendor = await Vendor.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
-    if (!updatedVendor)
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor not found" });
+    const vendorId = req.params.id; // Vendor ID from URL
+    const {
+      name,
+      category,
+      contactPerson,
+      phoneNo,
+      alternatePhoneNo,
+      email,
+      address,
+      services,
+      equipmentDetails,
+      bankDetails,
+      experience,
+      designation,
+      expertiseLevel,
+      camera,
+      otherEquipment,
+      status, // Optional status field
+    } = req.body;
+
+
+    // Construct the update payload (only fields passed in the request will be updated)
+    const updatedVendorData = {
+      name,
+      category,
+      contactPerson,
+      phoneNo,
+      alternatePhoneNo,
+      email,
+      address,
+      services,
+      equipmentDetails,
+      bankDetails,
+      experience,
+      designation,
+      expertiseLevel,
+      camera,
+      otherEquipment,
+      status, // Optional, not required
+    };
+
+    // Ensure that only fields with values are updated
+    Object.keys(updatedVendorData).forEach(key => updatedVendorData[key] === undefined && delete updatedVendorData[key]);
+
+    // Update the vendor document in the database
+    const updatedVendor = await Vendor.findByIdAndUpdate(vendorId, updatedVendorData, {
+      new: true, // Return the updated vendor
+      runValidators: true, // Ensure validations are run (e.g., required fields, format)
+    });
+
+    if (!updatedVendor) {
+      return res.status(404).json({ success: false, message: "Vendor not found" });
+    }
+
     res.status(200).json({ success: true, vendor: updatedVendor });
   } catch (error) {
-    console.error("Update Vendor Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to update vendor", error });
+    console.error("Error updating vendor:", error);
+    res.status(500).json({ success: false, message: "Failed to update vendor", error });
   }
 };
 
