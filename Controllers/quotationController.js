@@ -672,176 +672,6 @@ function ensureCapacity(arr, len) {
  * If vendorId is null/undefined => clear at that unit
  */
 
-// exports.assignVendorToServiceUnit = async (req, res) => {
-//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
-//   const { vendorId, vendorName, slot, eventStartDate } = req.body;
-
-//   try {
-//     const quotation = await Quotation.findById(quotationId);
-//     if (!quotation) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Quotation not found",
-//       });
-//     }
-
-//     const pkg = quotation.packages.id(packageId);
-//     if (!pkg) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Package not found in quotation",
-//       });
-//     }
-
-//     const service = pkg.services.id(serviceId);
-//     if (!service) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Service not found in package",
-//       });
-//     }
-
-//     const unit = parseInt(unitIndex, 10);
-//     const qty = Math.max(1, service.qty || 1);
-
-//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid unitIndex",
-//       });
-//     }
-
-//     // Validate required fields for assignment
-//     if (vendorId && (!vendorName || !slot || !eventStartDate)) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "vendorName, slot, and eventStartDate are required when assigning a vendor",
-//       });
-//     }
-
-//     // Grow arrays to match qty for safe indexing
-//     service.assignedVendors = ensureCapacity(service.assignedVendors, qty);
-
-//     // Free previously assigned vendor for this unit
-//     const previousAssignment = service.assignedVendors[unit];
-//     if (previousAssignment?.vendorId) {
-//       // Remove old vendor from inventory for this specific date/slot
-//       await VendorInventory.findOneAndDelete({
-//         vendorId: previousAssignment.vendorId,
-//         date: eventStartDate,
-//         slot: slot,
-//         quotationId: quotationId,
-//         serviceId: serviceId,
-//         unitIndex: unit,
-//       }).catch(console.error);
-
-//       // Update vendor status back to available
-//       await Vendor.findByIdAndUpdate(previousAssignment.vendorId, {
-//         status: "Available",
-//       }).catch(console.error);
-//     }
-
-//     if (vendorId) {
-//       const vendor = await Vendor.findById(vendorId);
-//       if (!vendor) {
-//         return res.status(404).json({
-//           success: false,
-//           message: "Vendor not found",
-//         });
-//       }
-
-//       // Use provided vendorName or fallback to vendor document name
-//       const finalVendorName = vendorName || vendor.name;
-
-//       // Check if vendor is already booked for this date and slot
-//       const existingBooking = await VendorInventory.findOne({
-//         vendorId: vendorId,
-//         date: eventStartDate,
-//         slot: slot,
-//       });
-
-//       if (existingBooking) {
-//         return res.status(400).json({
-//           success: false,
-//           message: `Vendor ${finalVendorName} is already booked for ${eventStartDate} (${slot} slot)`,
-//         });
-//       }
-
-//       // Check vendor availability
-//       if (vendor.status === "Not Available") {
-//         // Additional check to see if they're available for this specific date
-//         const otherBookings = await VendorInventory.find({
-//           vendorId: vendorId,
-//           date: eventStartDate,
-//         });
-
-//         if (otherBookings.length > 0) {
-//           return res.status(400).json({
-//             success: false,
-//             message: `Vendor ${finalVendorName} is not available on ${eventStartDate}`,
-//           });
-//         }
-//       }
-
-//       // Update service assignment
-//       service.assignedVendors[unit] = {
-//         vendorId: new mongoose.Types.ObjectId(vendorId),
-//         vendorName: finalVendorName,
-//         category: vendor.category,
-//         assignedDate: new Date(),
-//         slot: slot,
-//         eventDate: eventStartDate,
-//       };
-
-//       // Add vendor to inventory with all relevant information
-//       const vendorInventoryEntry = new VendorInventory({
-//         vendorId: vendorId,
-//         vendorName: finalVendorName,
-//         vendorCategory: vendor.category,
-//         date: eventStartDate,
-//         slot: slot,
-//         quotationId: quotationId,
-//         packageId: packageId,
-//         serviceId: serviceId,
-//         serviceName: service.serviceName,
-//         unitIndex: unit,
-//         status: "Booked",
-//       });
-
-//       await vendorInventoryEntry.save();
-
-//       // Update vendor status
-//       // await Vendor.findByIdAndUpdate(vendorId, {
-//       //   status: "Not Available",
-//       // }).catch(console.error);
-//     } else {
-//       // Clear vendor assignment
-//       service.assignedVendors[unit] = null;
-//     }
-
-//     await quotation.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: vendorId
-//         ? `Vendor ${vendorName} assigned to ${service.serviceName} (unit ${
-//             unit + 1
-//           }/${qty})`
-//         : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
-//       service: service.toObject ? service.toObject() : service,
-//     });
-//   } catch (err) {
-//     console.error("assignVendorToServiceUnit error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: process.env.NODE_ENV === "development" ? err.message : undefined,
-//     });
-//   }
-// };
-
-// Helper function to ensure array capacity
 
 exports.assignVendorToServiceUnit = async (req, res) => {
   const { quotationId, packageId, serviceId, unitIndex } = req.params;
@@ -919,6 +749,8 @@ exports.assignVendorToServiceUnit = async (req, res) => {
         assignedDate: new Date(),
         slot,
         eventDate: eventStartDate,
+        salary: vendor.specialization.find(s => s.name === service.serviceName).salary,
+        paymentStatus: "Pending",
       };
 
       // Save to VendorInventory
@@ -953,8 +785,6 @@ exports.assignVendorToServiceUnit = async (req, res) => {
   }
 };
 
-
-
 // Helper
 function ensureCapacity(array, capacity) {
   if (!array) array = [];
@@ -970,6 +800,109 @@ function ensureCapacity(array, capacity) {
  * - If assistantId is provided → assign assistant (just like vendor).
  * - If assistantId is missing/null → clear assistant AND vendor for that unit and remove from inventory.
  */
+
+// exports.assignAssistantToServiceUnit = async (req, res) => {
+//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
+//   const { assistantId, assistantName, slot, eventStartDate } = req.body;
+
+//   try {
+//     const quotation = await Quotation.findById(quotationId);
+//     if (!quotation) {
+//       return res.status(404).json({ success: false, message: "Quotation not found" });
+//     }
+
+//     const pkg = quotation.packages.id(packageId);
+//     if (!pkg) {
+//       return res.status(404).json({ success: false, message: "Package not found in quotation" });
+//     }
+
+//     const service = pkg.services.id(serviceId);
+//     if (!service) {
+//       return res.status(404).json({ success: false, message: "Service not found in package" });
+//     }
+
+//     const unit = parseInt(unitIndex, 10);
+//     const qty = Math.max(1, service.qty || 1);
+//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
+//       return res.status(400).json({ success: false, message: "Invalid unitIndex" });
+//     }
+
+//     // Ensure arrays sized correctly
+//     service.assignedAssistants = ensureCapacity(service.assignedAssistants, qty);
+
+//     if (assistantId) {
+//       const asst = await Vendor.findById(assistantId);
+//       if (!asst) {
+//         return res.status(404).json({ success: false, message: "Assistant vendor not found" });
+//       }
+
+//       // Assign assistant for this unit
+//       service.assignedAssistants[unit] = {
+//         assistantId: new mongoose.Types.ObjectId(assistantId),
+//         assistantName: assistantName || asst.name,
+//         category: asst.category,
+//         slot,
+//         eventDate: eventStartDate,
+//       };
+
+//       // Prevent double-booking in inventory
+//       const existingBooking = await VendorInventory.findOne({
+//         vendorId: assistantId,
+//         date: eventStartDate,
+//         slot,
+//       });
+//       if (existingBooking) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Assistant ${assistantName || asst.name} already booked for ${eventStartDate} (${slot} slot)`,
+//         });
+//       }
+
+//       // Save to inventory
+//       const entry = new VendorInventory({
+//         vendorId: assistantId,
+//         vendorName: assistantName || asst.name,
+//         date: eventStartDate,
+//         slot,
+//       });
+//       await entry.save();
+//     } else {
+//       // ❌ No assistantId → clear assistant for this unit AND remove from VendorInventory
+//       const prevAssistant = service.assignedAssistants[unit];
+
+//       service.assignedAssistants[unit] = null;
+
+//       // Remove from VendorInventory using either current request values OR previous assignment values
+//       if (prevAssistant?.assistantId) {
+//         await VendorInventory.findOneAndDelete({
+//           vendorId: prevAssistant.assistantId,
+//           date: eventStartDate || prevAssistant.eventDate, // prioritize request date
+//           slot: slot || prevAssistant.slot,               // prioritize request slot
+//         }).catch(console.error);
+//       }
+//     }
+
+//     await quotation.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: assistantId
+//         ? `Assistant assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+//         : `Assistant cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
+//       service: service.toObject ? service.toObject() : service,
+//     });
+//   } catch (err) {
+//     console.error("assignAssistantToServiceUnit error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: process.env.NODE_ENV === "development" ? err.message : undefined,
+//     });
+//   }
+// };
+
+
+// GET /api/quotations/booked-events-by-date/:date
 
 exports.assignAssistantToServiceUnit = async (req, res) => {
   const { quotationId, packageId, serviceId, unitIndex } = req.params;
@@ -997,8 +930,18 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid unitIndex" });
     }
 
-    // Ensure arrays sized correctly
+    // Ensure array capacity
     service.assignedAssistants = ensureCapacity(service.assignedAssistants, qty);
+
+    // 🟢 Always remove previous assignment from VendorInventory (if any)
+    const previousAssignment = service.assignedAssistants[unit];
+    if (previousAssignment?.assistantId) {
+      await VendorInventory.findOneAndDelete({
+        vendorId: previousAssignment.assistantId,
+        date: eventStartDate || previousAssignment.eventDate,
+        slot: slot || previousAssignment.slot,
+      }).catch(console.error);
+    }
 
     if (assistantId) {
       const asst = await Vendor.findById(assistantId);
@@ -1006,16 +949,7 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
         return res.status(404).json({ success: false, message: "Assistant vendor not found" });
       }
 
-      // Assign assistant for this unit
-      service.assignedAssistants[unit] = {
-        assistantId: new mongoose.Types.ObjectId(assistantId),
-        assistantName: assistantName || asst.name,
-        category: asst.category,
-        slot,
-        eventDate: eventStartDate,
-      };
-
-      // Prevent double-booking in inventory
+      // Prevent double booking
       const existingBooking = await VendorInventory.findOne({
         vendorId: assistantId,
         date: eventStartDate,
@@ -1028,7 +962,16 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
         });
       }
 
-      // Save to inventory
+      // Assign new assistant
+      service.assignedAssistants[unit] = {
+        assistantId: new mongoose.Types.ObjectId(assistantId),
+        assistantName: assistantName || asst.name,
+        category: asst.category,
+        slot,
+        eventDate: eventStartDate,
+      };
+
+      // Save to VendorInventory
       const entry = new VendorInventory({
         vendorId: assistantId,
         vendorName: assistantName || asst.name,
@@ -1037,19 +980,8 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
       });
       await entry.save();
     } else {
-      // ❌ No assistantId → clear assistant for this unit AND remove from VendorInventory
-      const prevAssistant = service.assignedAssistants[unit];
-
+      // Clear assignment
       service.assignedAssistants[unit] = null;
-
-      // Remove from VendorInventory using either current request values OR previous assignment values
-      if (prevAssistant?.assistantId) {
-        await VendorInventory.findOneAndDelete({
-          vendorId: prevAssistant.assistantId,
-          date: eventStartDate || prevAssistant.eventDate, // prioritize request date
-          slot: slot || prevAssistant.slot,               // prioritize request slot
-        }).catch(console.error);
-      }
     }
 
     await quotation.save();
@@ -1057,7 +989,7 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: assistantId
-        ? `Assistant assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+        ? `Assistant ${assistantName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
         : `Assistant cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
       service: service.toObject ? service.toObject() : service,
     });
@@ -1072,7 +1004,6 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
 };
 
 
-// GET /api/quotations/booked-events-by-date/:date
 exports.getBookedEventsByDate = async (req, res) => {
   try {
     const { date } = req.params;

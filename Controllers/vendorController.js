@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Vendor = require("../models/vendor.model");
-const VendorInventory  = require("../models/vendorInventory")
-const dayjs = require("dayjs");  
+const VendorInventory = require("../models/vendorInventory")
+const dayjs = require("dayjs");
 const Quotation = require("../models/quotation.model");
 
 // Create Vendor
@@ -21,7 +21,7 @@ exports.createVendor = async (req, res) => {
 // Get All Vendors with pagination and search
 exports.getAllVendors = async (req, res) => {
   try {
-    const { page , limit , search = "" } = req.query;
+    const { page, limit, search = "" } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const searchRegex = new RegExp(search, "i");
 
@@ -192,7 +192,7 @@ exports.getVendorsByServiceName = async (req, res) => {
 exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
   try {
     const { serviceName } = req.params;
-    const { date, slot } = req.query;
+    const {  date, slot } = req.query;
 
     // Validate required parameters
     if (!serviceName) {
@@ -230,10 +230,10 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
     // Step 3: Map through all vendors and check availability
     const availableVendors = allVendors.filter(vendor => {
       // Check if vendor ID exists in inventory records
-      const isBooked = vendorInventoryRecords.some(inventory => 
+      const isBooked = vendorInventoryRecords.some(inventory =>
         inventory.vendorId.toString() === vendor._id.toString()
       );
-      
+
       // Return true if vendor is NOT booked (available)
       return !isBooked;
     });
@@ -287,7 +287,8 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
 // Update Vendor Details
 exports.updateVendor = async (req, res) => {
   try {
-    const vendorId = req.params.id; // Vendor ID from URL
+    const vendorId = req.params.id;
+
     const {
       name,
       category,
@@ -296,7 +297,7 @@ exports.updateVendor = async (req, res) => {
       alternatePhoneNo,
       email,
       address,
-      services,
+      specialization, // ✅ FIX: expect specialization from body
       equipmentDetails,
       bankDetails,
       experience,
@@ -304,11 +305,9 @@ exports.updateVendor = async (req, res) => {
       expertiseLevel,
       camera,
       otherEquipment,
-      status, // Optional status field
+      status,
     } = req.body;
 
-
-    // Construct the update payload (only fields passed in the request will be updated)
     const updatedVendorData = {
       name,
       category,
@@ -317,7 +316,7 @@ exports.updateVendor = async (req, res) => {
       alternatePhoneNo,
       email,
       address,
-      services,
+      specialization,   // ✅ FIX: include specialization
       equipmentDetails,
       bankDetails,
       experience,
@@ -325,17 +324,22 @@ exports.updateVendor = async (req, res) => {
       expertiseLevel,
       camera,
       otherEquipment,
-      status, // Optional, not required
+      status,
     };
 
-    // Ensure that only fields with values are updated
-    Object.keys(updatedVendorData).forEach(key => updatedVendorData[key] === undefined && delete updatedVendorData[key]);
+    // Remove undefined fields
+    Object.keys(updatedVendorData).forEach(
+      (key) => updatedVendorData[key] === undefined && delete updatedVendorData[key]
+    );
 
-    // Update the vendor document in the database
-    const updatedVendor = await Vendor.findByIdAndUpdate(vendorId, updatedVendorData, {
-      new: true, // Return the updated vendor
-      runValidators: true, // Ensure validations are run (e.g., required fields, format)
-    });
+    const updatedVendor = await Vendor.findByIdAndUpdate(
+      vendorId,
+      updatedVendorData,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
     if (!updatedVendor) {
       return res.status(404).json({ success: false, message: "Vendor not found" });
@@ -370,7 +374,7 @@ exports.deleteVendor = async (req, res) => {
 // Fetch all available inhouse vendors (only selected fields)
 exports.getAvailableInhouseVendors = async (req, res) => {
   const vendors = await Vendor.find(
-    { category: "Inhouse Vendor",},
+    { category: "Inhouse Vendor", },
     { name: 1, category: 1, phoneNo: 1, alternatePhoneNo: 1, email: 1, _id: 1 }
   ).sort("name");
 
@@ -382,13 +386,100 @@ exports.getAvailableInhouseVendors = async (req, res) => {
 };
 
 
-exports.vendorPayment = async (req, res) => {
+// exports.getPendingVendorPayments = async (req, res) => {
+//   try {
+//     const today = dayjs().format("YYYY-MM-DD");
+
+//     // 1. Fetch quotations except those with bookingStatus = NotBooked
+//     const quotations = await Quotation.find({
+//       bookingStatus: { $ne: "NotBooked" }
+//     }).lean();
+
+//     // 2. Fetch all vendors once and index them
+//     const vendors = await Vendor.find().lean();
+//     const vendorMap = {};
+//     for (const v of vendors) {
+//       vendorMap[v._id.toString()] = v;
+//     }
+
+//     // 3. Payments store
+//     const vendorPayments = {};
+
+//     // 4. Process quotations
+//     for (const quotation of quotations) {
+//       for (const pkg of quotation.packages) {
+//         if (dayjs(pkg.eventStartDate).isBefore(today)) {
+//           for (const service of pkg.services) {
+//             for (const vendor of service.assignedVendors) {
+//               if (!vendor) continue;
+
+//               // ✅ Skip if payment status is not Pending
+//               if (vendor.paymentStatus !== "Pending") continue;
+
+//               const vendorDoc = vendorMap[vendor.vendorId.toString()];
+//               if (!vendorDoc) continue;
+
+//               // ✅ Use salary from quotation if present, else fallback to specialization
+//               let salary = vendor.salary;
+//               if (!salary) {
+//                 const specialization = vendorDoc.specialization.find(
+//                   (s) => s.name === service.serviceName
+//                 );
+//                 salary = specialization?.salary || 0;
+//               }
+
+//               if (salary > 0) {
+//                 if (!vendorPayments[vendor.vendorId]) {
+//                   vendorPayments[vendor.vendorId] = {
+//                     vendorName: vendor.vendorName,
+//                     vendorCategory: vendor.category,
+//                     totalSalary: 0,
+//                     events: []
+//                   };
+//                 }
+
+//                 vendorPayments[vendor.vendorId].totalSalary += salary;
+//                 vendorPayments[vendor.vendorId].events.push({
+//                   packageId: pkg._id,
+//                   categoryName: pkg.categoryName,
+//                   serviceId: service._id,
+//                   quoteId: quotation.quotationId,
+//                   quotationId: quotation._id,
+//                   serviceName: service.serviceName,
+//                   eventDate: pkg.eventStartDate,
+//                   slot: pkg.slot,
+//                   salary
+//                 });
+//               }
+//             }
+//           }
+//         }
+//       }
+//     }
+
+//     return res.json({ success: true, data: vendorPayments });
+//   } catch (err) {
+//     console.error("Error calculating vendor payments:", err);
+//     return res.status(500).json({ success: false, message: "Server Error" });
+//   }
+// };
+
+exports.getVendorPaymentsByStatus = async (req, res) => {
   try {
+    const { status, page = 1, limit = 10, search = "" } = req.query; 
     const today = dayjs().format("YYYY-MM-DD");
+
+    // Validate status
+    if (!status || !["Pending", "Completed"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status. Use ?status=Pending or ?status=Completed",
+      });
+    }
 
     // 1. Fetch quotations except those with bookingStatus = NotBooked
     const quotations = await Quotation.find({
-      bookingStatus: { $ne: "NotBooked" }
+      bookingStatus: { $ne: "NotBooked" },
     }).lean();
 
     // 2. Fetch all vendors once and index them
@@ -409,32 +500,43 @@ exports.vendorPayment = async (req, res) => {
             for (const vendor of service.assignedVendors) {
               if (!vendor) continue;
 
-              const vendorDoc = vendorMap[vendor.vendorId.toString()];
+              // ✅ Match only vendors with requested payment status
+              if (vendor.paymentStatus !== status) continue;
+
+              const vendorDoc = vendorMap[vendor.vendorId?.toString()];
               if (!vendorDoc) continue;
 
-              // Match specialization salary
-              const specialization = vendorDoc.specialization.find(
-                (s) => s.name === service.serviceName
-              );
+              // ✅ Use salary from quotation if present, else fallback to specialization
+              let salary = vendor.salary;
+              if (!salary) {
+                const specialization = vendorDoc.specialization.find(
+                  (s) => s.name === service.serviceName
+                );
+                salary = specialization?.salary || 0;
+              }
 
-              if (specialization?.salary) {
+              if (salary > 0) {
                 if (!vendorPayments[vendor.vendorId]) {
                   vendorPayments[vendor.vendorId] = {
+                    vendorId: vendor.vendorId,
                     vendorName: vendor.vendorName,
+                    vendorCategory: vendor.category,
                     totalSalary: 0,
-                    events: []
+                    events: [],
                   };
                 }
-         
 
-                vendorPayments[vendor.vendorId].totalSalary += specialization.salary;
+                vendorPayments[vendor.vendorId].totalSalary += salary;
                 vendorPayments[vendor.vendorId].events.push({
+                  packageId: pkg._id,
+                  categoryName: pkg.categoryName,
+                  serviceId: service._id,
                   quoteId: quotation.quotationId,
                   quotationId: quotation._id,
                   serviceName: service.serviceName,
                   eventDate: pkg.eventStartDate,
                   slot: pkg.slot,
-                  salary: specialization.salary
+                  salary,
                 });
               }
             }
@@ -443,11 +545,143 @@ exports.vendorPayment = async (req, res) => {
       }
     }
 
-    return res.json({ success: true, data: vendorPayments });
+    // 5. Convert to array
+    let vendorArray = Object.values(vendorPayments);
+
+    // 6. Search by vendorName (case-insensitive)
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      vendorArray = vendorArray.filter((v) => searchRegex.test(v.vendorName));
+    }
+
+    // 7. Pagination
+    const total = vendorArray.length;
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const endIndex = startIndex + parseInt(limit);
+    const paginated = vendorArray.slice(startIndex, endIndex);
+
+    return res.json({
+      success: true,
+      status,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      data: paginated,
+    });
   } catch (err) {
-    console.error("Error calculating vendor payments:", err);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.error("Error calculating vendor payments by status:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Server Error" });
   }
 };
 
+
+// exports.payVendor = async (req, res) => {
+//   try {
+//     const { quotationId, packageId, serviceId, vendorId } = req.params;
+//     const { paymentMode, paymentDate } = req.body;
+
+//     if (!paymentMode || !paymentDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "paymentMode and paymentDate are required",
+//       });
+//     }
+
+//     // 1. Find quotation
+//     const quotation = await Quotation.findById(quotationId);
+//     if (!quotation) {
+//       return res.status(404).json({ success: false, message: "Quotation not found" });
+//     }
+
+//     // 2. Find the package
+//     const pkg = quotation.packages.id(packageId);
+//     if (!pkg) {
+//       return res.status(404).json({ success: false, message: "Package not found" });
+//     }
+
+//     // 3. Find the service
+//     const service = pkg.services.id(serviceId);
+//     if (!service) {
+//       return res.status(404).json({ success: false, message: "Service not found" });
+//     }
+
+//     // 4. Find assigned vendor
+//     const vendor = service.assignedVendors.find(
+//       (v) => v && v.vendorId.toString() === vendorId
+//     );
+//     if (!vendor) {
+//       return res.status(404).json({ success: false, message: "Vendor not found in service" });
+//     }
+
+//     // 5. Update vendor payment details
+//     vendor.paymentStatus = "Completed";
+//     vendor.paymentDate = paymentDate;
+//     vendor.paymentMode = paymentMode;
+
+//     // 6. Save quotation
+//     await quotation.save();
+
+//     return res.json({
+//       success: true,
+//       message: "Vendor payment updated successfully",
+//       data: {
+//         quotationId,
+//         packageId,
+//         serviceId,
+//         vendorId,
+//         paymentStatus: vendor.paymentStatus,
+//         paymentMode: vendor.paymentMode,
+//         paymentDate: vendor.paymentDate,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Error updating vendor payment:", err);
+//     return res.status(500).json({ success: false, message: "Server Error" });
+//   }
+// };
+
+
+exports.payVendor = async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    const { paymentMode, paymentDate } = req.body;
+
+    if (!paymentMode || !paymentDate) {
+      return res.status(400).json({
+        success: false,
+        message: "paymentMode and paymentDate are required",
+      });
+    }
+
+    // Update all quotations where this vendor is pending
+    const result = await Quotation.updateMany(
+      { "packages.services.assignedVendors.vendorId": vendorId },
+      {
+        $set: {
+          "packages.$[].services.$[].assignedVendors.$[v].paymentStatus": "Completed",
+          "packages.$[].services.$[].assignedVendors.$[v].paymentDate": paymentDate,
+          "packages.$[].services.$[].assignedVendors.$[v].paymentMode": paymentMode,
+        },
+      },
+      {
+        arrayFilters: [
+          { "v.vendorId": vendorId, "v.paymentStatus": "Pending" },
+        ],
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Vendor payments updated successfully",
+      vendorId,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error("Error updating vendor payments:", err);
+    return res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
 

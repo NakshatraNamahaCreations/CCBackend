@@ -246,6 +246,10 @@ const AssignedVendorSchema = new mongoose.Schema(
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
     vendorName: String,
     category: String,
+    salary: Number,
+    paymentStatus: { type: String, enum: ["Completed", "Pending"], default: "Pending" },
+    paymentDate: { type: Date},
+    paymentMode: { type: String},
   },
   { _id: false }
 );
@@ -255,6 +259,7 @@ const AssignedAssistantSchema = new mongoose.Schema(
     assistantId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
     assistantName: String,
     category: String,
+
   },
   { _id: false }
 );
