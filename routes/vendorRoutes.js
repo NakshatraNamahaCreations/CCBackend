@@ -25,7 +25,7 @@ router.put("/:id", vendorCtrl.updateVendor);
 
 // Delete Vendor
 router.delete("/:id", vendorCtrl.deleteVendor);
-router.get("/inhouse", vendorCtrl.getAvailableInhouseVendors);
+router.get("/vendor-by-category/:category", vendorCtrl.getVendorsByCategory);
 router.get("/vendor-payments", vendorCtrl.getVendorPaymentsByStatus);
 
 // PUT /api/vendors/vendor-pay/:quotationId/package/:packageId/service/:serviceId/vendor/:vendorId

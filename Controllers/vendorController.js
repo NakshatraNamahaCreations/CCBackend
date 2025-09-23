@@ -192,7 +192,10 @@ exports.getVendorsByServiceName = async (req, res) => {
 exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
   try {
     const { serviceName } = req.params;
-    const {  date, slot } = req.query;
+    const { date, slot } = req.query;
+    console.log("serviceName", serviceName);
+    console.log("date", date);
+    console.log("slot", slot);
 
     // Validate required parameters
     if (!serviceName) {
@@ -260,31 +263,6 @@ exports.getAvailableVendorsByServiceAndDate = async (req, res) => {
 };
 
 
-// Update Vendor
-// exports.updateVendor = async (req, res) => {
-//   try {
-//     const updatedVendor = await Vendor.findByIdAndUpdate(
-//       req.params.id,
-//       req.body,
-//       {
-//         new: true,
-//         runValidators: true,
-//       }
-//     );
-//     if (!updatedVendor)
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Vendor not found" });
-//     res.status(200).json({ success: true, vendor: updatedVendor });
-//   } catch (error) {
-//     console.error("Update Vendor Error:", error);
-//     res
-//       .status(500)
-//       .json({ success: false, message: "Failed to update vendor", error });
-//   }
-// };
-
-// Update Vendor Details
 exports.updateVendor = async (req, res) => {
   try {
     const vendorId = req.params.id;
@@ -371,18 +349,48 @@ exports.deleteVendor = async (req, res) => {
   }
 };
 
-// Fetch all available inhouse vendors (only selected fields)
-exports.getAvailableInhouseVendors = async (req, res) => {
-  const vendors = await Vendor.find(
-    { category: "Inhouse Vendor", },
-    { name: 1, category: 1, phoneNo: 1, alternatePhoneNo: 1, email: 1, _id: 1 }
-  ).sort("name");
 
-  res.status(200).json({
-    success: true,
-    count: vendors.length,
-    data: vendors,
-  });
+exports.getVendorsByCategory = async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    // Normalize input → schema stores "Inhouse Vendor" or "Outsource Vendor"
+    let formattedCategory;
+    if (category.toLowerCase() === "inhouse") {
+      formattedCategory = "Inhouse Vendor";
+    } else if (category.toLowerCase() === "outsource") {
+      formattedCategory = "Outsource Vendor";
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category. Use 'inhouse' or 'outsource'.",
+      });
+    }
+
+    const vendors = await Vendor.find(
+      { category: formattedCategory },
+      {
+        name: 1,
+        category: 1,
+        phoneNo: 1,
+        alternatePhoneNo: 1,
+        email: 1,
+        _id: 1,
+      }
+    ).sort("name");
+
+    return res.status(200).json({
+      success: true,
+      count: vendors.length,
+      data: vendors,
+    });
+  } catch (err) {
+    console.error("Error fetching vendors by category:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching vendors",
+    });
+  }
 };
 
 
@@ -466,7 +474,7 @@ exports.getAvailableInhouseVendors = async (req, res) => {
 
 exports.getVendorPaymentsByStatus = async (req, res) => {
   try {
-    const { status, page = 1, limit = 10, search = "" } = req.query; 
+    const { status, page = 1, limit = 10, search = "" } = req.query;
     const today = dayjs().format("YYYY-MM-DD");
 
     // Validate status
@@ -576,72 +584,6 @@ exports.getVendorPaymentsByStatus = async (req, res) => {
       .json({ success: false, message: "Server Error" });
   }
 };
-
-
-// exports.payVendor = async (req, res) => {
-//   try {
-//     const { quotationId, packageId, serviceId, vendorId } = req.params;
-//     const { paymentMode, paymentDate } = req.body;
-
-//     if (!paymentMode || !paymentDate) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "paymentMode and paymentDate are required",
-//       });
-//     }
-
-//     // 1. Find quotation
-//     const quotation = await Quotation.findById(quotationId);
-//     if (!quotation) {
-//       return res.status(404).json({ success: false, message: "Quotation not found" });
-//     }
-
-//     // 2. Find the package
-//     const pkg = quotation.packages.id(packageId);
-//     if (!pkg) {
-//       return res.status(404).json({ success: false, message: "Package not found" });
-//     }
-
-//     // 3. Find the service
-//     const service = pkg.services.id(serviceId);
-//     if (!service) {
-//       return res.status(404).json({ success: false, message: "Service not found" });
-//     }
-
-//     // 4. Find assigned vendor
-//     const vendor = service.assignedVendors.find(
-//       (v) => v && v.vendorId.toString() === vendorId
-//     );
-//     if (!vendor) {
-//       return res.status(404).json({ success: false, message: "Vendor not found in service" });
-//     }
-
-//     // 5. Update vendor payment details
-//     vendor.paymentStatus = "Completed";
-//     vendor.paymentDate = paymentDate;
-//     vendor.paymentMode = paymentMode;
-
-//     // 6. Save quotation
-//     await quotation.save();
-
-//     return res.json({
-//       success: true,
-//       message: "Vendor payment updated successfully",
-//       data: {
-//         quotationId,
-//         packageId,
-//         serviceId,
-//         vendorId,
-//         paymentStatus: vendor.paymentStatus,
-//         paymentMode: vendor.paymentMode,
-//         paymentDate: vendor.paymentDate,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Error updating vendor payment:", err);
-//     return res.status(500).json({ success: false, message: "Server Error" });
-//   }
-// };
 
 
 exports.payVendor = async (req, res) => {

@@ -1290,78 +1290,6 @@ exports.getCompletedInstallments = async (req, res) => {
   }
 };
 
-// exports.updateCalculation = async (req, res) => {
-//   console.log("req.body calc", req.body);
-//   try {
-//     const { package: updatedPackage, ...totals } = req.body;
-
-//     // 1. Find the quotation
-//     const quotation = await Quotation.findById(req.params.id);
-//     if (!quotation) {
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Quotation not found" });
-//     }
-
-//     // 2. Update the specific package if provided
-//     if (updatedPackage && updatedPackage._id) {
-//       const packageIndex = quotation.packages.findIndex(
-//         (pkg) => pkg._id.toString() === updatedPackage._id
-//       );
-
-//       if (packageIndex !== -1) {
-//         // Replace the package with the updated one
-//         quotation.packages[packageIndex] = updatedPackage;
-//       } else {
-//         // If package not found but has _id, it might be an error
-//         return res.status(400).json({
-//           success: false,
-//           message: "Package not found in quotation",
-//         });
-//       }
-//     }
-
-//     // 3. Update all the calculated totals
-//     quotation.totalPackageAmt = totals.totalPackageAmt;
-//     quotation.totalAlbumAmount = totals.totalAlbumAmount;
-//     quotation.discountValue = totals.discountValue;
-//     quotation.gstValue = totals.gstValue;
-//     quotation.totalAmount = totals.totalAmount;
-//     quotation.grandTotal = totals.grandTotal;
-//     quotation.totalMarginFinal = totals.totalMarginFinal;
-
-//     // 4. Update installments (replace completely)
-//     quotation.installments = totals.installments.map((inst) => ({
-//       installmentNumber: inst.installmentNumber,
-//       dueDate: inst.dueDate,
-//       paymentMode: inst.paymentMode,
-//       paymentAmount: inst.paymentAmount,
-//       paymentPercentage: inst.paymentPercentage,
-//       paidAmount: inst.paidAmount,
-//       pendingAmount: inst.pendingAmount,
-//       status: inst.status,
-//       _id: inst._id, // Preserve existing _id
-//     }));
-
-//     // 5. Save the updated quotation
-//     const updatedQuotation = await quotation.save();
-
-//     res.json({
-//       success: true,
-//       quotation: updatedQuotation,
-//     });
-//   } catch (err) {
-//     console.error("Error updating quotation:", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to update quotation",
-//       error: err.message,
-//     });
-//   }
-// };
-
-// PUT /api/quotations/:quotationId/installment/:installmentId/payment
-
 exports.recordPayment = async (req, res) => {
   try {
     const { quotationId, installmentId } = req.params;
@@ -1439,12 +1367,58 @@ exports.recordPayment = async (req, res) => {
 };
 
 // PUT /api/quotations/:id/booking-status
+// exports.updateBookingStatus = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { status, queryId } = req.body;
+
+//     // const finalStatus = status ?? "Completed";
+//     const finalStatus = status ?? "Booked";
+//     const allowed = ["NotBooked", "Booked", "Completed"];
+//     if (!allowed.includes(finalStatus)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Invalid status. Allowed: ${allowed.join(", ")}`,
+//       });
+//     }
+
+//     const filter = mongoose.isValidObjectId(id)
+//       ? { _id: id }
+//       : { quotationId: id }; // use human id when not ObjectId
+
+//     const updated = await Quotation.findOneAndUpdate(
+//       filter,
+//       { $set: { bookingStatus: finalStatus } },
+//       { new: true }
+//     );
+
+//     if (!updated) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Quotation not found",
+//       });
+//     }
+
+//     return res.json({
+//       success: true,
+//       message: "Booking status updated",
+//       quotation: updated,
+//     });
+//   } catch (err) {
+//     console.error("updateBookingStatus error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to update booking status",
+//       error: err.message,
+//     });
+//   }
+// };
+
 exports.updateBookingStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, queryId } = req.body;
 
-    // const finalStatus = status ?? "Completed";
     const finalStatus = status ?? "Booked";
     const allowed = ["NotBooked", "Booked", "Completed"];
     if (!allowed.includes(finalStatus)) {
@@ -1454,27 +1428,39 @@ exports.updateBookingStatus = async (req, res) => {
       });
     }
 
+    // -------- Update Quotation --------
     const filter = mongoose.isValidObjectId(id)
       ? { _id: id }
       : { quotationId: id }; // use human id when not ObjectId
 
-    const updated = await Quotation.findOneAndUpdate(
+    const updatedQuotation = await Quotation.findOneAndUpdate(
       filter,
       { $set: { bookingStatus: finalStatus } },
       { new: true }
     );
 
-    if (!updated) {
+    if (!updatedQuotation) {
       return res.status(404).json({
         success: false,
         message: "Quotation not found",
       });
     }
 
+    // -------- Update Query by queryId --------
+    let updatedQuery = null;
+    if (queryId) {
+      updatedQuery = await Query.findOneAndUpdate(
+        { queryId: queryId },
+        { $set: { status: finalStatus } },
+        { new: true }
+      );
+    }
+
     return res.json({
       success: true,
-      message: "Booking status updated",
-      quotation: updated,
+      message: "Booking status updated successfully",
+      quotation: updatedQuotation,
+      query: updatedQuery,
     });
   } catch (err) {
     console.error("updateBookingStatus error:", err);
@@ -1568,8 +1554,6 @@ exports.countTodaysEvents = async (req, res) => {
     });
   }
 };
-
-// controllers/quotationController.js
 
 exports.countCompletedQuotations = async (req, res) => {
   try {
@@ -1916,3 +1900,24 @@ exports.updateInstallmentFirstPayment = async (req, res) => {
     });
   }
 };
+
+// ➤ Yearly Client Payments
+exports.getYearlyClientPayments = async (req, res) => {
+  try {
+    const stats = await Quotation.getYearlyClientPayments();
+    res.json({ success: true, data: stats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// ➤ Yearly Vendor Payments
+exports.getYearlyVendorPayments = async (req, res) => {
+  try {
+    const stats = await Quotation.getYearlyVendorPayments();
+    res.json({ success: true, data: stats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

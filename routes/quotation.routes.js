@@ -28,7 +28,9 @@ const {
   getQuotaionByQueryId,
   countPendingPaymentQuotations,
   countTodaysEvents,
-  countCompletedQuotations
+  countCompletedQuotations,
+  getYearlyClientPayments,
+  getYearlyVendorPayments
 } = require("../Controllers/quotationController");
 
 router.post("/create", createQuotation);
@@ -45,6 +47,8 @@ router.get('/booked-by-query/:queryId', getQuotaionByQueryId)
 router.get('/count/pending-payments', countPendingPaymentQuotations);
 router.get('/count/todays-events', countTodaysEvents);
 router.get('/count/completed', countCompletedQuotations)
+router.get('/stats/client-payments', getYearlyClientPayments);
+router.get('/stats/vendor-payments', getYearlyVendorPayments);
 
 router.get("/:id", getQuotationById);
 router.delete("/:id", deleteQuotation);

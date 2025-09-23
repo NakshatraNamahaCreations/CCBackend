@@ -407,4 +407,56 @@ QuotationSchema.pre("save", function (next) {
   next();
 });
 
+// ➤ Yearly client payments (sum of paidAmount)
+QuotationSchema.statics.getYearlyClientPayments = async function () {
+  return this.aggregate([
+    { $unwind: "$installments" },
+    {
+      $addFields: {
+        installmentYear: { $year: "$createdAt" } // use createdAt year of Quotation
+      }
+    },
+    {
+      $group: {
+        _id: "$installmentYear",
+        totalReceived: { $sum: "$installments.paidAmount" }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+};
+
+// ➤ Yearly vendor payments
+QuotationSchema.statics.getYearlyVendorPayments = async function () {
+  return this.aggregate([
+    { $unwind: "$packages" },
+    { $unwind: "$packages.services" },
+    { $unwind: "$packages.services.assignedVendors" },
+    {
+      $match: {
+        "packages.services.assignedVendors.paymentStatus": "Completed" // ✅ Only completed
+      }
+    },
+    {
+      $addFields: {
+        vendorPaymentYear: {
+          $cond: [
+            { $ifNull: ["$packages.services.assignedVendors.paymentDate", false] },
+            { $year: "$packages.services.assignedVendors.paymentDate" },
+            { $year: "$createdAt" }
+          ]
+        }
+      }
+    },
+    {
+      $group: {
+        _id: "$vendorPaymentYear",
+        totalPaid: { $sum: "$packages.services.assignedVendors.salary" }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+};
+
+
 module.exports = mongoose.model("Quotation", QuotationSchema);
