@@ -25,7 +25,6 @@ const dailyTaskRoutes = require("./routes/dailyTaskRoutes")
 const followUpRoutes = require("./routes/followUpRoutes")
 const vendorInventoryRoutes = require("./routes/vendorInventoryRoutes")
 const vendorPaymentsRoutes = require("./routes/vendorPaymentsRoutes")
-const sortedDataRoutes = require("./routes/sortedDataRoutes")
 
 
 dotenv.config();
@@ -111,7 +110,7 @@ app.use('/api/daily-tasks', dailyTaskRoutes);
 app.use('/api/follow-up', followUpRoutes);
 app.use('/api/vendor-inventory', vendorInventoryRoutes);
 app.use('/api/vendor-payments', vendorPaymentsRoutes);
-app.use('/api/sorted-data', sortedDataRoutes);
+
 
 
 
