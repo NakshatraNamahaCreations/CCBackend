@@ -52,29 +52,39 @@ const mongoose = require("mongoose");
 
 const ServiceUnitDataSchema = new mongoose.Schema(
   {
-    // Package (event) context
-    packageId: { type: mongoose.Schema.Types.ObjectId, required: true }, // was eventId
-    packageName: { type: String, required: true }, // was eventName
+    packageId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    packageName: { type: String, required: true },
 
-    // Service identity
     serviceId: { type: mongoose.Schema.Types.ObjectId, required: true },
     serviceName: { type: String, required: true },
 
-    // Which unit of the service (0-based index)
     unitIndex: { type: Number, required: true, min: 0 },
 
-    // Collected fields
     cameraName: { type: String },
     totalDriveSize: { type: String },
+
+    backupDrive: { type: String },
+    driveName: { type: String },
+    qualityChecked: { type: Boolean, default: false },
+
     filledSize: { type: String },
     copyingPerson: { type: String },
     copiedLocation: { type: String },
+    backupCopiedLocation: { type: String },
+
     noOfPhotos: { type: Number, default: 0 },
     noOfVideos: { type: Number, default: 0 },
+
+    // ✅ NEW fields matching frontend
+    firstPhotoTime: { type: String },
+    lastPhotoTime: { type: String },
+    firstVideoTime: { type: String },
+    lastVideoTime: { type: String },
+
     submissionDate: { type: Date },
     notes: { type: String },
-    backupCopiedLocation: { type: String },
-    editingStatus: { type: String, default: "Pending" },
+
+    sortingStatus: { type: String, default: "Pending" },
   },
   { timestamps: true }
 );
@@ -93,7 +103,10 @@ const CollectedDataSchema = new mongoose.Schema(
       required: true,
     },
     quotationUniqueId: { type: String, required: true },
+
+    // Renamed in UI: Couples / Person Name
     personName: { type: String, required: true },
+
     systemNumber: { type: String, required: true },
     backupSystemNumber: { type: String },
     immutableLock: { type: Boolean, default: false },
@@ -107,6 +120,7 @@ const CollectedDataSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Auto-calc totals
 CollectedDataSchema.pre("save", function (next) {
   const units = this.serviceUnits || [];
   this.totalPhotos = units.reduce((sum, su) => sum + (su.noOfPhotos || 0), 0);

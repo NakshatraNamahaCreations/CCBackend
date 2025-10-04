@@ -25,14 +25,12 @@ router.put("/:id", vendorCtrl.updateVendor);
 
 // Delete Vendor
 router.delete("/:id", vendorCtrl.deleteVendor);
-router.get("/vendor-by-category/:category", vendorCtrl.getVendorsByCategory);
+// router.get("/vendor-by-category/:category", vendorCtrl.getVendorsByCategory);
 router.get("/vendor-payments", vendorCtrl.getVendorPaymentsByStatus);
+// GET /api/vendors/category/:category
+router.get("/category/:category", vendorCtrl.getVendorsByCategory);
 
-// PUT /api/vendors/vendor-pay/:quotationId/package/:packageId/service/:serviceId/vendor/:vendorId
-// router.put(
-//     "/vendor-pay/:quotationId/package/:packageId/service/:serviceId/vendor/:vendorId",
-//     vendorCtrl.payVendor
-// );
+
 
 // routes/vendorPay.js
 router.put("/pay-vendor/:vendorId", vendorCtrl.payVendor);

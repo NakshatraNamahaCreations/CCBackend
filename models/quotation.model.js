@@ -1,111 +1,3 @@
-// const mongoose = require("mongoose");
-
-// const AssignedVendorSchema = new mongoose.Schema(
-//   {
-//     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
-//     vendorName: String,
-//     category: String,
-//   },
-//   { _id: false } // <-- add this
-// );
-
-// const AssignedAssistantSchema = new mongoose.Schema(
-//   {
-//     assistantId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
-//     assistantName: String,
-//     category: String,
-//   },
-//   { _id: false } // <-- add this
-// );
-
-// const ServiceSchema = new mongoose.Schema(
-//   {
-//     serviceName: String,
-//     price: Number,
-//     marginPrice: Number,
-//     qty: { type: Number, default: 1, min: 1 },
-
-//     // One entry per unit when qty > 1
-//     assignedVendors: { type: [AssignedVendorSchema], default: [] },
-//     assignedAssistants: { type: [AssignedAssistantSchema], default: [] },
-//   },
-//   { _id: true }
-// );
-
-// const PackageSchema = new mongoose.Schema(
-//   {
-//     categoryName: String,
-//     packageType: { type: String, enum: ["Custom", "Preset"], default: "Custom" },
-//     eventStartDate: String,
-//     eventEndDate: String,
-//     slot: String,
-//     venueName: String,
-//     venueAddress: String,
-//     services: { type: [ServiceSchema], default: [] },
-//   },
-//   { _id: true }
-// );
-
-// const InstallmentSchema = new mongoose.Schema(
-//   {
-//     installmentNumber: Number,
-//     dueDate: String,
-//     paymentMode: String,
-//     paymentAmount: Number,
-//     paymentPercentage: Number,
-//     status: { type: String, enum: ["Pending", "Completed"], default: "Pending" },
-//   },
-//   { _id: true }
-// );
-
-// const QuotationSchema = new mongoose.Schema(
-//   {
-//     leadId: { type: mongoose.Schema.Types.ObjectId, ref: "Lead", required: true },
-//     queryId: { type: mongoose.Schema.Types.ObjectId, ref: "Query", required: true },
-//     quotationId: { type: String, required: true, unique: true },
-
-//     quoteTitle: String,
-//     quoteDescription: String,
-//     invoiceNumber: { type: String, unique: true, sparse: true },
-
-//     packages: { type: [PackageSchema], default: [] },
-//     installments: { type: [InstallmentSchema], default: [] },
-
-//     totalAmount: Number,
-//     discountPercent: Number,
-//     discountValue: Number,
-//     gstApplied: Boolean,
-//     gstValue: Number,
-//     marginAmount: Number,
-
-//     bookingStatus: { type: String, enum: ["NotBooked", "Booked"], default: "NotBooked" },
-//     finalized: { type: Boolean, default: false },
-
-//     clientInstructions: { type: [String], default: [] },
-//   },
-//   { timestamps: true }
-// );
-
-// // Keep vendor/assistant arrays within qty bounds
-// QuotationSchema.pre("save", function (next) {
-//   this.packages?.forEach((pkg) => {
-//     pkg.services?.forEach((s) => {
-//       const desired = Math.max(1, s.qty || 1);
-
-//       if (!Array.isArray(s.assignedVendors)) s.assignedVendors = [];
-//       while (s.assignedVendors.length < desired) s.assignedVendors.push({}); // {} not null
-
-//       if (!Array.isArray(s.assignedAssistants)) s.assignedAssistants = [];
-//       while (s.assignedAssistants.length < desired) s.assignedAssistants.push({}); // {} not null
-
-//       if (s.assignedVendors.length > desired) s.assignedVendors = s.assignedVendors.slice(0, desired);
-//       if (s.assignedAssistants.length > desired) s.assignedAssistants = s.assignedAssistants.slice(0, desired);
-//     });
-//   });
-//   next();
-// });
-
-// module.exports = mongoose.model("Quotation", QuotationSchema);
 
 // models/Quotation.js
 const mongoose = require("mongoose");
@@ -351,11 +243,12 @@ const QuotationSchema = new mongoose.Schema(
       required: true,
     },
     quotationId: { type: String, required: true, unique: true },
-
+  
     quoteTitle: String,
     quoteDescription: String,
     invoiceNumber: { type: String, unique: true, sparse: true },
     quoteNote: String,
+    whatsappGroupName: String,
     packages: { type: [PackageSchema], default: [] },
     installments: { type: [InstallmentSchema], default: [] },
     totalPackageAmt: Number,
@@ -365,7 +258,7 @@ const QuotationSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    discountPercent: Number,
+    // discountPercent: Number,
     discountValue: Number,
     gstApplied: Boolean,
     gstValue: Number,

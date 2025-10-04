@@ -171,17 +171,24 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
       unitIndex,
       cameraName,
       totalDriveSize,
+      backupDrive,
+      driveName,
+      qualityChecked,
       filledSize,
       copyingPerson,
       copiedLocation,
       backupCopiedLocation,
       noOfPhotos,
       noOfVideos,
+      firstPhotoTime,     // ✅ NEW
+      lastPhotoTime,      // ✅ NEW
+      firstVideoTime,     // ✅ NEW
+      lastVideoTime,      // ✅ NEW
       submissionDate,
       notes,
     } = req.body;
 
-    // ✅ Validation
+    // Validation
     if (
       !quotationId ||
       !quotationUniqueId ||
@@ -207,7 +214,7 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
     let collectedData = await CollectedData.findOne({ quotationId: qId });
 
     if (!collectedData) {
-      // ✅ First-time insert
+      // First-time insert
       collectedData = new CollectedData({
         quotationId: qId,
         quotationUniqueId,
@@ -224,12 +231,19 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
             unitIndex: unitIdx,
             cameraName,
             totalDriveSize,
+            backupDrive,
+            driveName,
+            qualityChecked,
             filledSize,
             copyingPerson,
             copiedLocation,
             backupCopiedLocation,
             noOfPhotos,
             noOfVideos,
+            firstPhotoTime,   // ✅ NEW
+            lastPhotoTime,    // ✅ NEW
+            firstVideoTime,   // ✅ NEW
+            lastVideoTime,    // ✅ NEW
             submissionDate,
             notes,
             editingStatus: "Pending",
@@ -237,7 +251,7 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
         ],
       });
     } else {
-      // ✅ Prevent mutation of person/system
+      // Lock check
       if (collectedData.immutableLock) {
         if (
           collectedData.personName !== personName ||
@@ -245,7 +259,8 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
         ) {
           return res.status(400).json({
             success: false,
-            message: "Person name or System number cannot be changed once set.",
+            message:
+              "Person name or System number cannot be changed once set.",
           });
         }
       } else {
@@ -264,7 +279,7 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
       );
 
       if (idx > -1) {
-        // ✅ Update existing unit
+        // Update existing
         const oldUnit =
           collectedData.serviceUnits[idx].toObject?.() ||
           collectedData.serviceUnits[idx];
@@ -276,18 +291,25 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
           unitIndex: unitIdx,
           cameraName,
           totalDriveSize,
+          backupDrive,
+          driveName,
+          qualityChecked,
           filledSize,
           copyingPerson,
           copiedLocation,
           backupCopiedLocation,
           noOfPhotos,
           noOfVideos,
+          firstPhotoTime,   // ✅ NEW
+          lastPhotoTime,    // ✅ NEW
+          firstVideoTime,   // ✅ NEW
+          lastVideoTime,    // ✅ NEW
           submissionDate,
           notes,
           editingStatus: oldUnit.editingStatus,
         };
       } else {
-        // ✅ Insert new unit
+        // Insert new
         collectedData.serviceUnits.push({
           packageId: pkgId,
           packageName,
@@ -296,12 +318,19 @@ exports.addOrUpdateServiceUnitData = async (req, res) => {
           unitIndex: unitIdx,
           cameraName,
           totalDriveSize,
+          backupDrive,
+          driveName,
+          qualityChecked,
           filledSize,
           copyingPerson,
           copiedLocation,
           backupCopiedLocation,
           noOfPhotos,
           noOfVideos,
+          firstPhotoTime,   // ✅ NEW
+          lastPhotoTime,    // ✅ NEW
+          firstVideoTime,   // ✅ NEW
+          lastVideoTime,    // ✅ NEW
           submissionDate,
           notes,
           editingStatus: "Pending",

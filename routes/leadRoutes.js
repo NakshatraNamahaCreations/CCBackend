@@ -15,7 +15,7 @@ const {
   getQueryWithStatus,
   getCallLaterQueriesbyDate,
   getQueriesbyEventstartDate,
-  updateInstahandle,
+  updatePersonDetails,
   getTodayRescheduledCalls
 } = require("../Controllers/leadController");
 
@@ -47,6 +47,6 @@ router.get("/lead-query-details/:leadId/:queryId", getLeadQueryDetails);
 router.put("/:leadId/update-query/:queryId", updateLeadQueryDetails);
 
 router.put("/:queryId/status", updateQueryStatus);
-router.put("/:leadId/person/:personId/insta-handle",updateInstahandle)
+router.put("/:leadId/person/:personId",updatePersonDetails)
 
 module.exports = router;

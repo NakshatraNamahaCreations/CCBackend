@@ -587,14 +587,50 @@ exports.updateLeadQueryDetails = async (req, res) => {
   }
 };
 
-
 // Update Query Status by ID
+// exports.updateQueryStatus = async (req, res) => {
+//   try {
+//     const { status, comment, callRescheduledDate } = req.body;
+//     const updateFields = { status };
+
+//     // If status is "Call Later", ensure comment and callRescheduledDate are included
+//     if (
+//       status === "Call Later" &&
+//       comment !== "" &&
+//       callRescheduledDate !== ""
+//     ) {
+//       updateFields.comment = comment;
+//       updateFields.callRescheduledDate = callRescheduledDate;
+//     } else {
+//       // If status is not "Call Later", reset comment and callRescheduledDate
+//       updateFields.comment = "";
+//       updateFields.callRescheduledDate = "";
+//     }
+
+//     const query = await Query.findByIdAndUpdate(
+//       req.params.queryId,
+//       updateFields,
+//       { new: true }
+//     );
+
+//     if (!query) return res.status(404).json({ message: "Query not found" });
+
+//     res.json({ success: true, data: query });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 exports.updateQueryStatus = async (req, res) => {
   try {
-    const { status, comment, callRescheduledDate } = req.body;
+    const { status, comment, callRescheduledDate, calledBy, calledTo } =
+      req.body;
+
+    // Prepare update fields for main status
     const updateFields = { status };
 
-    // If status is "Call Later", ensure comment and callRescheduledDate are included
+    // If status is "Call Later", update comment and callRescheduledDate
     if (
       status === "Call Later" &&
       comment !== "" &&
@@ -608,6 +644,7 @@ exports.updateQueryStatus = async (req, res) => {
       updateFields.callRescheduledDate = "";
     }
 
+    // Update main status and fields
     const query = await Query.findByIdAndUpdate(
       req.params.queryId,
       updateFields,
@@ -615,6 +652,18 @@ exports.updateQueryStatus = async (req, res) => {
     );
 
     if (!query) return res.status(404).json({ message: "Query not found" });
+
+    // Add call history entry
+    query.callHistory.push({
+      calledBy: calledBy || "Unknown",
+      calledTo: calledTo || "Unknown",
+      callDate: new Date(),
+      remarks: comment || "",
+      rescheduledDate:
+        status === "Call Later" ? callRescheduledDate : undefined,
+    });
+
+    await query.save();
 
     res.json({ success: true, data: query });
   } catch (err) {
@@ -738,22 +787,21 @@ exports.getCallLaterQueriesbyDate = async (req, res) => {
   }
 };
 
-
 // Alternative API using aggregation for better performance
 // exports.getQueriesbyEventstartDate = async (req, res) => {
 //   try {
 //     const { startDate } = req.params;
 //     const targetDate = new Date(startDate);
-    
+
 //     if (isNaN(targetDate.getTime())) {
-//       return res.status(400).json({ 
-//         error: 'Invalid date format. Please use YYYY-MM-DD format.' 
+//       return res.status(400).json({
+//         error: 'Invalid date format. Please use YYYY-MM-DD format.'
 //       });
 //     }
 
 //     const startOfDay = new Date(targetDate);
 //     startOfDay.setHours(0, 0, 0, 0);
-    
+
 //     const endOfDay = new Date(targetDate);
 //     endOfDay.setHours(23, 59, 59, 999);
 
@@ -818,13 +866,12 @@ exports.getCallLaterQueriesbyDate = async (req, res) => {
 
 //   } catch (error) {
 //     console.error('Error fetching leads by event date:', error);
-//     res.status(500).json({ 
+//     res.status(500).json({
 //       error: 'Internal server error',
-//       message: error.message 
+//       message: error.message
 //     });
 //   }
 // };
-
 
 exports.getQueriesbyEventstartDate = async (req, res) => {
   try {
@@ -943,17 +990,21 @@ exports.getQueriesbyEventstartDate = async (req, res) => {
   }
 };
 
-// Instagram-only update endpoint
-exports.updateInstahandle =  async (req, res) => {
+
+exports.updatePersonDetails = async (req, res) => {
   try {
     const { leadId, personId } = req.params;
-    const { instagramHandle } = req.body;
+    const { instagramHandle, email, profession } = req.body;
 
-    // Validate input
-    if (instagramHandle === undefined || instagramHandle === null) {
+    // Validate: at least one field must be non-empty
+    if (
+      (!instagramHandle || !instagramHandle.trim()) &&
+      (!email || !email.trim()) &&
+      (!profession || !profession.trim())
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Instagram handle is required"
+        message: "Please provide at least one: Instagram handle, email, or profession",
       });
     }
 
@@ -961,7 +1012,7 @@ exports.updateInstahandle =  async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(leadId)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid lead ID format"
+        message: "Invalid lead ID format",
       });
     }
 
@@ -970,7 +1021,7 @@ exports.updateInstahandle =  async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: "Lead not found"
+        message: "Lead not found",
       });
     }
 
@@ -979,49 +1030,59 @@ exports.updateInstahandle =  async (req, res) => {
     if (!person) {
       return res.status(404).json({
         success: false,
-        message: "Person not found in this lead"
+        message: "Person not found in this lead",
       });
     }
 
-    // Update the Instagram handle
-    person.instagramHandle = instagramHandle;
+    // Update the fields if provided
+    if (instagramHandle !== undefined) person.instagramHandle = instagramHandle;
+    if (email !== undefined) person.email = email;
+    if (profession !== undefined) person.profession = profession;
 
     // Save the changes
     await lead.save();
 
     res.json({
       success: true,
-      message: "Instagram handle updated successfully",
+      message: "Person details updated successfully",
       data: {
         lead: {
           _id: lead._id,
-          leadId: lead.leadId
+          leadId: lead.leadId,
         },
         person: {
           _id: person._id,
           name: person.name,
-          instagramHandle: person.instagramHandle
-        }
-      }
+          instagramHandle: person.instagramHandle,
+          email: person.email,
+          profession: person.profession,
+        },
+      },
     });
-
   } catch (error) {
-    console.error("Error updating Instagram handle:", error);
+    console.error("Error updating person details:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update Instagram handle",
-      error: error.message
+      message: "Failed to update person details",
+      error: error.message,
     });
   }
-}
-
+};
 
 exports.getTodayRescheduledCalls = async (req, res) => {
   try {
     // Use server-local "today" boundaries: [startOfToday, startOfTomorrow)
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    const startOfTomorrow = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1
+    );
 
     const results = await Query.find({
       callRescheduledDate: { $gte: startOfToday, $lt: startOfTomorrow },

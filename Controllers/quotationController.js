@@ -47,7 +47,7 @@ exports.createQuotation = async (req, res) => {
       packages = [],
       installments = [],
       totalAmount = 0,
-      discountPercent = 0,
+      // discountPercent = 0,
       discountValue = 0,
       gstApplied = false,
       gstValue = 0,
@@ -101,7 +101,7 @@ exports.createQuotation = async (req, res) => {
       packages,
       installments: processedInstallments,
       totalAmount,
-      discountPercent,
+      // discountPercent,
       discountValue,
       gstApplied,
       gstValue,
@@ -149,7 +149,7 @@ exports.updateQuotation = async (req, res) => {
       packages,
       installments,
       totalAmount,
-      discountPercent,
+      // discountPercent,
       discountValue,
       gstApplied,
       gstValue,
@@ -177,8 +177,8 @@ exports.updateQuotation = async (req, res) => {
     if (packages !== undefined) quotation.packages = packages;
     if (installments !== undefined) quotation.installments = installments;
     if (totalAmount !== undefined) quotation.totalAmount = totalAmount;
-    if (discountPercent !== undefined)
-      quotation.discountPercent = discountPercent;
+    // if (discountPercent !== undefined)
+    //   quotation.discountPercent = discountPercent;
     if (discountValue !== undefined) quotation.discountValue = discountValue;
     if (gstApplied !== undefined) quotation.gstApplied = gstApplied;
     if (gstValue !== undefined) quotation.gstValue = gstValue;
@@ -255,11 +255,11 @@ exports.getFinalizedQuotationsPaginated = async (req, res) => {
       finalized: true,
       ...(search
         ? {
-          $or: [
-            { quotationId: { $regex: searchRegex } },
-            { quoteTitle: { $regex: searchRegex } },
-          ],
-        }
+            $or: [
+              { quotationId: { $regex: searchRegex } },
+              { quoteTitle: { $regex: searchRegex } },
+            ],
+          }
         : {}),
     };
 
@@ -660,38 +660,243 @@ exports.deleteQuotation = async (req, res) => {
   }
 };
 
-// Helper
+
+// ---------------- Helper Functions ----------------
+
+// Ensures assignedVendors/Assistants array has enough slots
+// function ensureCapacity(arr, len) {
+//   if (!Array.isArray(arr)) arr = [];
+//   while (arr.length < len) arr.push(null);
+//   return arr;
+// }
+
+// // Checks if two date ranges overlap
+// function hasOverlap(start1, end1, start2, end2) {
+//   return new Date(start1) <= new Date(end2) && new Date(end1) >= new Date(start2);
+// }
+
+// // ---------------- Vendor Assignment ----------------
+
+// /**
+//  * PUT /api/quotations/:quotationId/package/:packageId/service/:serviceId/unit/:unitIndex/assign-vendor
+//  * Body: { vendorId, vendorName, slot, eventStartDate, eventEndDate }
+//  */
+// exports.assignVendorToServiceUnit = async (req, res) => {
+//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
+//   const { vendorId, vendorName, slot, eventStartDate, eventEndDate } = req.body;
+
+//   try {
+//     const quotation = await Quotation.findById(quotationId);
+//     if (!quotation) return res.status(404).json({ success: false, message: "Quotation not found" });
+
+//     const pkg = quotation.packages.id(packageId);
+//     if (!pkg) return res.status(404).json({ success: false, message: "Package not found in quotation" });
+
+//     const service = pkg.services.id(serviceId);
+//     if (!service) return res.status(404).json({ success: false, message: "Service not found in package" });
+
+//     const unit = parseInt(unitIndex, 10);
+//     const qty = Math.max(1, service.qty || 1);
+//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
+//       return res.status(400).json({ success: false, message: "Invalid unitIndex" });
+//     }
+
+//     // Ensure array capacity
+//     service.assignedVendors = ensureCapacity(service.assignedVendors, qty);
+
+//     // 🟢 Remove previous booking from inventory
+//     const previousAssignment = service.assignedVendors[unit];
+//     if (previousAssignment?.vendorId) {
+//       await VendorInventory.findOneAndDelete({
+//         vendorId: previousAssignment.vendorId,
+//         eventStartDate: previousAssignment.eventStartDate,
+//         eventEndDate: previousAssignment.eventEndDate,
+//         slot: previousAssignment.slot,
+//       }).catch(console.error);
+//     }
+
+//     if (vendorId) {
+//       const vendor = await Vendor.findById(vendorId);
+//       if (!vendor) return res.status(404).json({ success: false, message: "Vendor not found" });
+
+//       const finalVendorName = vendorName || vendor.name;
+
+//       // 🛑 Prevent overlapping booking
+//       const existingBookings = await VendorInventory.find({ vendorId });
+//       const overlap = existingBookings.some((b) => {
+//         if (!hasOverlap(eventStartDate, eventEndDate, b.eventStartDate, b.eventEndDate)) return false;
+//         // block if same slot or if either is full day
+//         return slot === "Full Day" || b.slot === "Full Day" || b.slot === slot;
+//       });
+
+//       if (overlap) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Vendor ${finalVendorName} already booked between ${eventStartDate} and ${eventEndDate} (${slot})`,
+//         });
+//       }
+
+//       // ✅ Assign new vendor
+//       service.assignedVendors[unit] = {
+//         vendorId: new mongoose.Types.ObjectId(vendorId),
+//         vendorName: finalVendorName,
+//         category: vendor.category,
+//         assignedDate: new Date(),
+//         slot,
+//         eventStartDate,
+//         eventEndDate,
+//         salary: vendor.specialization.find((s) => s.name === service.serviceName)?.salary || 0,
+//         paymentStatus: "Pending",
+//       };
+
+//       // Save to VendorInventory
+//       const vendorInventoryEntry = new VendorInventory({
+//         vendorId,
+//         vendorName: finalVendorName,
+//         eventStartDate,
+//         eventEndDate,
+//         slot,
+//       });
+//       await vendorInventoryEntry.save();
+//     } else {
+//       // ❌ Clear assignment
+//       service.assignedVendors[unit] = null;
+//     }
+
+//     await quotation.save();
+//     return res.status(200).json({
+//       success: true,
+//       message: vendorId
+//         ? `Vendor ${vendorName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+//         : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
+//       service: service.toObject(),
+//     });
+//   } catch (err) {
+//     console.error("assignVendorToServiceUnit error:", err);
+//     return res.status(500).json({ success: false, message: "Internal server error" });
+//   }
+// };
+
+// // ---------------- Assistant Assignment ----------------
+
+// /**
+//  * PUT /api/quotations/:quotationId/package/:packageId/service/:serviceId/unit/:unitIndex/assign-assistant
+//  * Body: { assistantId, assistantName, slot, eventStartDate, eventEndDate }
+//  */
+// exports.assignAssistantToServiceUnit = async (req, res) => {
+//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
+//   const { assistantId, assistantName, slot, eventStartDate, eventEndDate } = req.body;
+
+//   try {
+//     const quotation = await Quotation.findById(quotationId);
+//     if (!quotation) return res.status(404).json({ success: false, message: "Quotation not found" });
+
+//     const pkg = quotation.packages.id(packageId);
+//     if (!pkg) return res.status(404).json({ success: false, message: "Package not found in quotation" });
+
+//     const service = pkg.services.id(serviceId);
+//     if (!service) return res.status(404).json({ success: false, message: "Service not found in package" });
+
+//     const unit = parseInt(unitIndex, 10);
+//     const qty = Math.max(1, service.qty || 1);
+//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
+//       return res.status(400).json({ success: false, message: "Invalid unitIndex" });
+//     }
+
+//     // Ensure array capacity
+//     service.assignedAssistants = ensureCapacity(service.assignedAssistants, qty);
+
+//     // 🟢 Remove previous booking
+//     const previousAssignment = service.assignedAssistants[unit];
+//     if (previousAssignment?.assistantId) {
+//       await VendorInventory.findOneAndDelete({
+//         vendorId: previousAssignment.assistantId,
+//         eventStartDate: previousAssignment.eventStartDate,
+//         eventEndDate: previousAssignment.eventEndDate,
+//         slot: previousAssignment.slot,
+//       }).catch(console.error);
+//     }
+
+//     if (assistantId) {
+//       const asst = await Vendor.findById(assistantId);
+//       if (!asst) return res.status(404).json({ success: false, message: "Assistant vendor not found" });
+
+//       // 🛑 Prevent overlapping booking
+//       const existingBookings = await VendorInventory.find({ vendorId: assistantId });
+//       const overlap = existingBookings.some((b) => {
+//         if (!hasOverlap(eventStartDate, eventEndDate, b.eventStartDate, b.eventEndDate)) return false;
+//         return slot === "Full Day" || b.slot === "Full Day" || b.slot === slot;
+//       });
+
+//       if (overlap) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Assistant ${assistantName || asst.name} already booked between ${eventStartDate} and ${eventEndDate} (${slot})`,
+//         });
+//       }
+
+//       // ✅ Assign new assistant
+//       service.assignedAssistants[unit] = {
+//         assistantId: new mongoose.Types.ObjectId(assistantId),
+//         assistantName: assistantName || asst.name,
+//         category: asst.category,
+//         slot,
+//         eventStartDate,
+//         eventEndDate,
+//       };
+
+//       // Save to VendorInventory
+//       const entry = new VendorInventory({
+//         vendorId: assistantId,
+//         vendorName: assistantName || asst.name,
+//         eventStartDate,
+//         eventEndDate,
+//         slot,
+//       });
+//       await entry.save();
+//     } else {
+//       service.assignedAssistants[unit] = null;
+//     }
+
+//     await quotation.save();
+//     return res.status(200).json({
+//       success: true,
+//       message: assistantId
+//         ? `Assistant ${assistantName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
+//         : `Assistant cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
+//       service: service.toObject(),
+//     });
+//   } catch (err) {
+//     console.error("assignAssistantToServiceUnit error:", err);
+//     return res.status(500).json({ success: false, message: "Internal server error" });
+//   }
+// };
+
+// Ensures assignedVendors/Assistants array has enough slots
 function ensureCapacity(arr, len) {
   if (!Array.isArray(arr)) arr = [];
   while (arr.length < len) arr.push(null);
   return arr;
 }
-/**
- * PUT /api/quotations/:quotationId/package/:packageId/service/:serviceId/unit/:unitIndex/assign-vendor
- * Body: { vendorId?: string|null, vendorName?: string }
- * If vendorId is null/undefined => clear at that unit
- */
 
+// Utility
+function normalizeDate(date) {
+  return dayjs(date).format("YYYY-MM-DD");
+}
 
 exports.assignVendorToServiceUnit = async (req, res) => {
   const { quotationId, packageId, serviceId, unitIndex } = req.params;
-  const { vendorId, vendorName, slot, eventStartDate } = req.body;
+  const { vendorId, vendorName, slot, eventStartDate, eventEndDate } = req.body;
 
   try {
     const quotation = await Quotation.findById(quotationId);
-    if (!quotation) {
-      return res.status(404).json({ success: false, message: "Quotation not found" });
-    }
+    if (!quotation) return res.status(404).json({ success: false, message: "Quotation not found" });
 
     const pkg = quotation.packages.id(packageId);
-    if (!pkg) {
-      return res.status(404).json({ success: false, message: "Package not found in quotation" });
-    }
+    if (!pkg) return res.status(404).json({ success: false, message: "Package not found" });
 
     const service = pkg.services.id(serviceId);
-    if (!service) {
-      return res.status(404).json({ success: false, message: "Service not found in package" });
-    }
+    if (!service) return res.status(404).json({ success: false, message: "Service not found" });
 
     const unit = parseInt(unitIndex, 10);
     const qty = Math.max(1, service.qty || 1);
@@ -699,70 +904,63 @@ exports.assignVendorToServiceUnit = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid unitIndex" });
     }
 
-    // Validate required fields
-    if (vendorId && (!vendorName || !slot || !eventStartDate)) {
-      return res.status(400).json({
-        success: false,
-        message: "vendorName, slot, and eventStartDate are required when assigning a vendor",
-      });
-    }
-
     // Ensure array capacity
     service.assignedVendors = ensureCapacity(service.assignedVendors, qty);
 
-    // Remove previous vendor assignment from inventory
-    const previousAssignment = service.assignedVendors[unit];
-    if (previousAssignment?.vendorId) {
-      await VendorInventory.findOneAndDelete({
-        vendorId: previousAssignment.vendorId,
-        date: eventStartDate || previousAssignment.eventDate,
-        slot: slot || previousAssignment.slot,
-      }).catch(console.error);
-    }
+    // 🔴 Always remove old VendorInventory for this unit
+    await VendorInventory.deleteOne({
+      quotationId: quotation._id,
+      packageId: pkg._id.toString(),
+      serviceId: service._id.toString(),
+      unitIndex: unit,
+    });
 
     if (vendorId) {
       const vendor = await Vendor.findById(vendorId);
-      if (!vendor) {
-        return res.status(404).json({ success: false, message: "Vendor not found" });
-      }
+      if (!vendor) return res.status(404).json({ success: false, message: "Vendor not found" });
 
       const finalVendorName = vendorName || vendor.name;
 
-      // Prevent double booking
-      const existingBooking = await VendorInventory.findOne({
-        vendorId,
-        date: eventStartDate,
-        slot,
+      // 🛑 Prevent overlapping booking
+      const existingBookings = await VendorInventory.find({ vendorId });
+      const overlap = existingBookings.some((b) => {
+        if (!hasOverlap(eventStartDate, eventEndDate, b.eventStartDate, b.eventEndDate)) return false;
+        return slot === "Full Day" || b.slot === "Full Day" || b.slot === slot;
       });
-      if (existingBooking) {
+
+      if (overlap) {
         return res.status(400).json({
           success: false,
-          message: `Vendor ${finalVendorName} is already booked for ${eventStartDate} (${slot} slot)`,
+          message: `Vendor ${finalVendorName} already booked between ${eventStartDate} and ${eventEndDate} (${slot})`,
         });
       }
 
-      // Assign new vendor
+      // ✅ Assign new vendor
       service.assignedVendors[unit] = {
         vendorId: new mongoose.Types.ObjectId(vendorId),
         vendorName: finalVendorName,
         category: vendor.category,
         assignedDate: new Date(),
         slot,
-        eventDate: eventStartDate,
-        salary: vendor.specialization.find(s => s.name === service.serviceName).salary,
+        eventStartDate,
+        eventEndDate,
+        salary: vendor.specialization.find((s) => s.name === service.serviceName)?.salary || 0,
         paymentStatus: "Pending",
       };
 
       // Save to VendorInventory
-      const vendorInventoryEntry = new VendorInventory({
+      await VendorInventory.create({
         vendorId,
         vendorName: finalVendorName,
-        date: eventStartDate,
+        quotationId: quotation._id,
+        packageId: pkg._id.toString(),
+        serviceId: service._id.toString(),
+        unitIndex: unit,
+        eventStartDate: normalizeDate(eventStartDate),
+        eventEndDate: normalizeDate(eventEndDate),
         slot,
       });
-      await vendorInventoryEntry.save();
     } else {
-      // Clear vendor assignment
       service.assignedVendors[unit] = null;
     }
 
@@ -773,156 +971,28 @@ exports.assignVendorToServiceUnit = async (req, res) => {
       message: vendorId
         ? `Vendor ${vendorName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
         : `Vendor cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
-      service: service.toObject ? service.toObject() : service,
+      service: service.toObject(),
     });
   } catch (err) {
-    console.error("assignVendorToServiceUnit error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: process.env.NODE_ENV === "development" ? err.message : undefined,
-    });
+    console.error("assignVendorToServiceUnit error:", err.message, err.stack);
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
-// Helper
-function ensureCapacity(array, capacity) {
-  if (!array) array = [];
-  while (array.length < capacity) {
-    array.push(null);
-  }
-  return array;
-}
-
-/**
- * PUT /api/quotations/:quotationId/package/:packageId/service/:serviceId/unit/:unitIndex/assign-assistant
- * Body: { assistantId?: string|null, assistantName?: string, slot?: string, eventStartDate?: string }
- * - If assistantId is provided → assign assistant (just like vendor).
- * - If assistantId is missing/null → clear assistant AND vendor for that unit and remove from inventory.
- */
-
-// exports.assignAssistantToServiceUnit = async (req, res) => {
-//   const { quotationId, packageId, serviceId, unitIndex } = req.params;
-//   const { assistantId, assistantName, slot, eventStartDate } = req.body;
-
-//   try {
-//     const quotation = await Quotation.findById(quotationId);
-//     if (!quotation) {
-//       return res.status(404).json({ success: false, message: "Quotation not found" });
-//     }
-
-//     const pkg = quotation.packages.id(packageId);
-//     if (!pkg) {
-//       return res.status(404).json({ success: false, message: "Package not found in quotation" });
-//     }
-
-//     const service = pkg.services.id(serviceId);
-//     if (!service) {
-//       return res.status(404).json({ success: false, message: "Service not found in package" });
-//     }
-
-//     const unit = parseInt(unitIndex, 10);
-//     const qty = Math.max(1, service.qty || 1);
-//     if (Number.isNaN(unit) || unit < 0 || unit >= qty) {
-//       return res.status(400).json({ success: false, message: "Invalid unitIndex" });
-//     }
-
-//     // Ensure arrays sized correctly
-//     service.assignedAssistants = ensureCapacity(service.assignedAssistants, qty);
-
-//     if (assistantId) {
-//       const asst = await Vendor.findById(assistantId);
-//       if (!asst) {
-//         return res.status(404).json({ success: false, message: "Assistant vendor not found" });
-//       }
-
-//       // Assign assistant for this unit
-//       service.assignedAssistants[unit] = {
-//         assistantId: new mongoose.Types.ObjectId(assistantId),
-//         assistantName: assistantName || asst.name,
-//         category: asst.category,
-//         slot,
-//         eventDate: eventStartDate,
-//       };
-
-//       // Prevent double-booking in inventory
-//       const existingBooking = await VendorInventory.findOne({
-//         vendorId: assistantId,
-//         date: eventStartDate,
-//         slot,
-//       });
-//       if (existingBooking) {
-//         return res.status(400).json({
-//           success: false,
-//           message: `Assistant ${assistantName || asst.name} already booked for ${eventStartDate} (${slot} slot)`,
-//         });
-//       }
-
-//       // Save to inventory
-//       const entry = new VendorInventory({
-//         vendorId: assistantId,
-//         vendorName: assistantName || asst.name,
-//         date: eventStartDate,
-//         slot,
-//       });
-//       await entry.save();
-//     } else {
-//       // ❌ No assistantId → clear assistant for this unit AND remove from VendorInventory
-//       const prevAssistant = service.assignedAssistants[unit];
-
-//       service.assignedAssistants[unit] = null;
-
-//       // Remove from VendorInventory using either current request values OR previous assignment values
-//       if (prevAssistant?.assistantId) {
-//         await VendorInventory.findOneAndDelete({
-//           vendorId: prevAssistant.assistantId,
-//           date: eventStartDate || prevAssistant.eventDate, // prioritize request date
-//           slot: slot || prevAssistant.slot,               // prioritize request slot
-//         }).catch(console.error);
-//       }
-//     }
-
-//     await quotation.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: assistantId
-//         ? `Assistant assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
-//         : `Assistant cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
-//       service: service.toObject ? service.toObject() : service,
-//     });
-//   } catch (err) {
-//     console.error("assignAssistantToServiceUnit error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: process.env.NODE_ENV === "development" ? err.message : undefined,
-//     });
-//   }
-// };
-
-
-// GET /api/quotations/booked-events-by-date/:date
 
 exports.assignAssistantToServiceUnit = async (req, res) => {
   const { quotationId, packageId, serviceId, unitIndex } = req.params;
-  const { assistantId, assistantName, slot, eventStartDate } = req.body;
+  const { assistantId, assistantName, slot, eventStartDate, eventEndDate } = req.body;
 
   try {
     const quotation = await Quotation.findById(quotationId);
-    if (!quotation) {
-      return res.status(404).json({ success: false, message: "Quotation not found" });
-    }
+    if (!quotation) return res.status(404).json({ success: false, message: "Quotation not found" });
 
     const pkg = quotation.packages.id(packageId);
-    if (!pkg) {
-      return res.status(404).json({ success: false, message: "Package not found in quotation" });
-    }
+    if (!pkg) return res.status(404).json({ success: false, message: "Package not found" });
 
     const service = pkg.services.id(serviceId);
-    if (!service) {
-      return res.status(404).json({ success: false, message: "Service not found in package" });
-    }
+    if (!service) return res.status(404).json({ success: false, message: "Service not found" });
 
     const unit = parseInt(unitIndex, 10);
     const qty = Math.max(1, service.qty || 1);
@@ -933,54 +1003,57 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
     // Ensure array capacity
     service.assignedAssistants = ensureCapacity(service.assignedAssistants, qty);
 
-    // 🟢 Always remove previous assignment from VendorInventory (if any)
-    const previousAssignment = service.assignedAssistants[unit];
-    if (previousAssignment?.assistantId) {
-      await VendorInventory.findOneAndDelete({
-        vendorId: previousAssignment.assistantId,
-        date: eventStartDate || previousAssignment.eventDate,
-        slot: slot || previousAssignment.slot,
-      }).catch(console.error);
-    }
+    // 🔴 Always remove old VendorInventory for this unit
+    await VendorInventory.deleteOne({
+      quotationId: quotation._id,
+      packageId: pkg._id.toString(),
+      serviceId: service._id.toString(),
+      unitIndex: unit,
+    });
 
     if (assistantId) {
       const asst = await Vendor.findById(assistantId);
-      if (!asst) {
-        return res.status(404).json({ success: false, message: "Assistant vendor not found" });
-      }
+      if (!asst) return res.status(404).json({ success: false, message: "Assistant vendor not found" });
 
-      // Prevent double booking
-      const existingBooking = await VendorInventory.findOne({
-        vendorId: assistantId,
-        date: eventStartDate,
-        slot,
+      const finalAsstName = assistantName || asst.name;
+
+      // 🛑 Prevent overlap
+      const existingBookings = await VendorInventory.find({ vendorId: assistantId });
+      const overlap = existingBookings.some((b) => {
+        if (!hasOverlap(eventStartDate, eventEndDate, b.eventStartDate, b.eventEndDate)) return false;
+        return slot === "Full Day" || b.slot === "Full Day" || b.slot === slot;
       });
-      if (existingBooking) {
+
+      if (overlap) {
         return res.status(400).json({
           success: false,
-          message: `Assistant ${assistantName || asst.name} already booked for ${eventStartDate} (${slot} slot)`,
+          message: `Assistant ${finalAsstName} already booked between ${eventStartDate} and ${eventEndDate} (${slot})`,
         });
       }
 
-      // Assign new assistant
+      // ✅ Assign new assistant
       service.assignedAssistants[unit] = {
         assistantId: new mongoose.Types.ObjectId(assistantId),
-        assistantName: assistantName || asst.name,
+        assistantName: finalAsstName,
         category: asst.category,
         slot,
-        eventDate: eventStartDate,
+        eventStartDate,
+        eventEndDate,
       };
 
       // Save to VendorInventory
-      const entry = new VendorInventory({
+      await VendorInventory.create({
         vendorId: assistantId,
-        vendorName: assistantName || asst.name,
-        date: eventStartDate,
+        vendorName: finalAsstName,
+        quotationId: quotation._id,
+        packageId: pkg._id.toString(),
+        serviceId: service._id.toString(),
+        unitIndex: unit,
+        eventStartDate: normalizeDate(eventStartDate),
+        eventEndDate: normalizeDate(eventEndDate),
         slot,
       });
-      await entry.save();
     } else {
-      // Clear assignment
       service.assignedAssistants[unit] = null;
     }
 
@@ -991,17 +1064,14 @@ exports.assignAssistantToServiceUnit = async (req, res) => {
       message: assistantId
         ? `Assistant ${assistantName} assigned to ${service.serviceName} (unit ${unit + 1}/${qty})`
         : `Assistant cleared for ${service.serviceName} (unit ${unit + 1}/${qty})`,
-      service: service.toObject ? service.toObject() : service,
+      service: service.toObject(),
     });
   } catch (err) {
-    console.error("assignAssistantToServiceUnit error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: process.env.NODE_ENV === "development" ? err.message : undefined,
-    });
+    console.error("assignAssistantToServiceUnit error:", err.message, err.stack);
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
 
 
 exports.getBookedEventsByDate = async (req, res) => {
@@ -1721,14 +1791,24 @@ exports.updateInstallmentStatus = async (req, res) => {
 
       if (paymentAmount !== undefined) {
         installment.paymentAmount = paymentAmount;
-        // Update paid/pending amounts based on the status from frontend
+
         if (status === "Completed") {
           installment.paidAmount = paymentAmount;
           installment.pendingAmount = 0;
         } else if (status === "Partial Paid") {
-          // For partial payments, maintain existing paidAmount or set to paymentAmount
-          installment.paidAmount = installment.paidAmount || paymentAmount;
-          installment.pendingAmount = paymentAmount - installment.paidAmount;
+          // Add the new payment to previous paidAmount
+          const prevPaid = Number(installment.paidAmount) || 0;
+          const newPaid = Number(req.body.paidAmount) || 0; // <-- frontend should send paidAmount as the amount being paid now
+          installment.paidAmount = prevPaid + newPaid;
+          installment.pendingAmount = Math.max(
+            0,
+            paymentAmount - installment.paidAmount
+          );
+          // If fully paid, mark as completed
+          if (installment.paidAmount >= paymentAmount) {
+            installment.status = "Completed";
+            installment.pendingAmount = 0;
+          }
         } else {
           // Pending status
           installment.paidAmount = 0;
@@ -1901,6 +1981,34 @@ exports.updateInstallmentFirstPayment = async (req, res) => {
   }
 };
 
+// Update WhatsApp group name or Note
+exports.updateGroupOrNote = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { whatsappGroupName, note } = req.body;
+
+    if (!whatsappGroupName && !note) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Either group name or note is required" });
+    }
+
+    const updated = await Quotation.findByIdAndUpdate(
+      id,
+      { ...(whatsappGroupName && { whatsappGroupName }), ...(note && { quoteNote: note }) },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: "Quotation not found" });
+    }
+
+    res.json({ success: true, quotation: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ➤ Yearly Client Payments
 exports.getYearlyClientPayments = async (req, res) => {
   try {
@@ -1920,4 +2028,6 @@ exports.getYearlyVendorPayments = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+
 
