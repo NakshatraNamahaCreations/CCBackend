@@ -257,7 +257,7 @@
 // controllers/dailyTaskController.js
 const mongoose = require("mongoose");
 const moment = require("moment");
-const DailyTask = require("../models/DailyTask");
+const DailyTask = require("../models/dailyTask");
 
 // Create a new daily task
 exports.createDailyTask = async (req, res) => {
