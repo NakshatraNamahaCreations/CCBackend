@@ -24,7 +24,7 @@
 // routes/dailyTaskRoutes.js
 const express = require('express');
 const router = express.Router();
-const dailyTaskController = require('../controllers/dailyTaskController');
+const dailyTaskController = require('../Controllers/dailyTaskController');
 
 // Create a new daily task
 router.post('/', dailyTaskController.createDailyTask);
