@@ -584,3 +584,40 @@ exports.payVendor = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
+exports.getVendorsbySpecilazition =  async (req, res) => {
+  try {
+    const { name } = req.params;
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Specialization name is required" });
+    }
+
+    // Case-insensitive search in specialization array
+    const vendors = await Vendor.find({
+      "specialization.name": { $regex: new RegExp("^" + name + "$", "i") }
+    });
+
+    if (!vendors.length) {
+      return res.status(404).json({
+        success: false,
+        message: `No vendors found with specialization: ${name}`,
+      });
+    }
+
+    res.json({
+      success: true,
+      count: vendors.length,
+      data: vendors,
+    });
+  } catch (error) {
+    console.error("Error fetching vendors by specialization:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching vendors",
+      error: error.message,
+    });
+  }
+};
+
+

@@ -69,7 +69,7 @@ const BankDetailsSchema = new mongoose.Schema({
   ifsc: { type: String, required: true },
   branch: { type: String, required: true },
   panNumber: { type: String },
-  aadhaarNumber: { type: String, required: true },
+  aadhaarNumber: { type: String, },
 });
 
 const SpecializationSchema = new mongoose.Schema({
@@ -95,9 +95,9 @@ const VendorSchema = new mongoose.Schema(
     contactPerson: { type: String, required: true },
     phoneNo: { type: String, required: true },
     alternatePhoneNo: { type: String },
-    email: { type: String, required: true },
+    email: { type: String,  },
     address: { type: String, required: true },
-    specialization: [SpecializationSchema], // Updated field name from services to specialization
+    specialization: [SpecializationSchema], 
     equipmentDetails: [EquipmentDetailsSchema],
     bankDetails: BankDetailsSchema,
     experience: { type: String },
@@ -106,6 +106,7 @@ const VendorSchema = new mongoose.Schema(
       type: String,
       enum: ["Beginner", "Intermediate", "Advanced"],
     },
+   
     camera: { type: String },
     otherEquipment: { type: String },
   },

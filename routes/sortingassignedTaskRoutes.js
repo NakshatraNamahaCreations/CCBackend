@@ -10,6 +10,7 @@
 // // router.get('/detailed-media', getOverallMediaNeedingAssignment);
 
 // module.exports = router;
+
 const express = require("express");
 const router = express.Router();
 
@@ -17,8 +18,9 @@ const {
   assignTask,
   submitTask,
   updateTaskStatus,
-  getTaskByServiceUnit
-} = require("../Controllers/assignedTaskController");
+  getTaskByServiceUnit,
+  getSortedTaskByQuotation,
+} = require("../Controllers/sortingassignedTaskController");
 
 // Assign new task
 router.post("/assign", assignTask);
@@ -31,5 +33,7 @@ router.patch("/:id/status", updateTaskStatus);
 
 // ✅ FIXED: consistent route with frontend
 router.get("/service-unit/:unitId", getTaskByServiceUnit);
+
+router.get("/completed/:quotationId", getSortedTaskByQuotation);
 
 module.exports = router;

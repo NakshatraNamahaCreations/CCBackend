@@ -1,4 +1,4 @@
-const AssignedTask = require("../models/assignedTask");
+const AssignedTask = require("../models/sortingassignedTask");
 const Vendor = require("../models/vendor.model");
 const mongoose = require("mongoose");
 
@@ -368,7 +368,7 @@ exports.assignTask = async (req, res) => {
       serviceUnitId,
       vendorId,
       vendorName,
-      taskType,
+      // taskType,
       taskDescription,
       noOfPhotos,
       noOfVideos,
@@ -381,7 +381,7 @@ exports.assignTask = async (req, res) => {
       serviceUnitId,
       vendorId,
       vendorName,
-      taskType,
+      // taskType,
       taskDescription,
       noOfPhotos,
       noOfVideos,
@@ -420,7 +420,8 @@ exports.assignTask = async (req, res) => {
 exports.submitTask = async (req, res) => {
   try {
     const { id } = req.params;
-    const { submittedPhotos, submittedVideos, submittedNotes , submittedDate} = req.body;
+    const { submittedPhotos, submittedVideos, submittedNotes, submittedDate } =
+      req.body;
 
     const task = await AssignedTask.findById(id);
     if (!task) {
@@ -490,19 +491,168 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
+// exports.getTaskByServiceUnit = async (req, res) => {
+//   try {
+//     const { unitId } = req.params;
+
+//     // Find task and populate quotation
+//     const task = await AssignedTask.findOne({ serviceUnitId: unitId }).populate(
+//       {
+//         path: "quotationId",
+//         select: `
+//           quotationId
+//           quoteTitle
+//           quoteNote
+//           totalAmount
+//           bookingStatus
+//           albums
+//           packages.categoryName
+//           packages.eventStartDate
+//           packages.eventEndDate
+//           packages.slot
+//           packages.venueName
+//         `,
+//       }
+//     );
+
+//     if (!task) {
+//       return res.status(404).json({ success: false, message: "No task found" });
+//     }
+
+//     res.json({ success: true, data: task });
+//   } catch (err) {
+//     console.error("Error fetching task:", err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
 exports.getTaskByServiceUnit = async (req, res) => {
   try {
     const { unitId } = req.params;
 
-    const task = await AssignedTask.findOne({ serviceUnitId: unitId });
+    const task = await AssignedTask.findOne({ serviceUnitId: unitId }).populate(
+      {
+        path: "quotationId",
+        select: `
+          quotationId 
+          quoteTitle 
+          quoteNote 
+          totalAmount 
+          bookingStatus 
+          albums
+          packages.categoryName 
+          packages.eventStartDate 
+          packages.eventEndDate 
+          packages.slot 
+          packages.venueName
+        `,
+      }
+    );
 
     if (!task) {
-      return res.status(404).json({ success: false, message: "No task found" });
+      // 🟢 Instead of 404, return success true with empty array
+      return res.json({ success: true, data: [] });
     }
 
-    res.json({ success: true, data: task });
+    // 🟢 Format quotation to only return selected fields
+    const quotation = task.quotationId
+      ? {
+          _id: task.quotationId._id,
+          quotationId: task.quotationId.quotationId,
+          quoteTitle: task.quotationId.quoteTitle,
+          quoteNote: task.quotationId.quoteNote,
+          totalAmount: task.quotationId.totalAmount,
+          bookingStatus: task.quotationId.bookingStatus,
+          albums: task.quotationId.albums,
+          packages: (task.quotationId.packages || []).map((pkg) => ({
+            categoryName: pkg.categoryName,
+            eventStartDate: pkg.eventStartDate,
+            eventEndDate: pkg.eventEndDate,
+            slot: pkg.slot,
+            venueName: pkg.venueName,
+          })),
+        }
+      : null;
+
+    res.json({
+      success: true,
+      data: {
+        ...task.toObject(),
+        quotationId: quotation,
+      },
+    });
   } catch (err) {
     console.error("Error fetching task:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+exports.getSortedTaskByQuotation = async (req, res) => {
+  try {
+    const { quotationId } = req.params;
+
+    if (!quotationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Quotation ID is required",
+      });
+    }
+
+    // Fetch tasks by quotationId where status is Completed
+    const tasks = await AssignedTask.find({
+      quotationId,
+      status: "Completed",
+    })
+      .populate({
+        path: "quotationId",
+        select: `
+          quoteTitle 
+          quoteNote 
+          totalAmount 
+          bookingStatus 
+          albums
+          packages.categoryName 
+          packages.eventStartDate 
+          packages.eventEndDate 
+          packages.slot 
+          packages.venueName
+        `,
+      })
+      .lean();
+
+    if (!tasks.length) {
+      return res.json({
+        success: true,
+        message: "No completed tasks found",
+        totalSortedPhotos: 0,
+        totalSortedVideos: 0,
+        data: [],
+      });
+    }
+
+    // Calculate totals
+    const totalSortedPhotos = tasks.reduce(
+      (sum, t) => sum + (t.submittedPhotos || 0),
+      0
+    );
+    const totalSortedVideos = tasks.reduce(
+      (sum, t) => sum + (t.submittedVideos || 0),
+      0
+    );
+
+    res.json({
+      success: true,
+      totalSortedPhotos,
+      totalSortedVideos,
+      data: tasks,
+    });
+  } catch (err) {
+    console.error("Error fetching completed tasks:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};
+

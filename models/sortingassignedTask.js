@@ -50,9 +50,10 @@
 // module.exports = mongoose.model("AssignedTask", AssignedTaskSchema);
 
 // models/Task.js
+
 const mongoose = require("mongoose");
 
-const AssignedTaskSchema = new mongoose.Schema(
+const SortingAssignedTaskSchema = new mongoose.Schema(
   {
     quotationId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -73,11 +74,6 @@ const AssignedTaskSchema = new mongoose.Schema(
     },
     vendorName: String,
 
-    taskType: {
-      type: String,
-      enum: ["PhotoSorting", "VideoConversion", "Both"],
-      required: true,
-    },
     taskDescription: String,
     noOfPhotos: { type: Number, default: 0 },
     noOfVideos: { type: Number, default: 0 },
@@ -93,12 +89,15 @@ const AssignedTaskSchema = new mongoose.Schema(
     },
 
     // ✅ NEW: Vendor submission tracking
-    submittedDate: { type: Date }, 
+    submittedDate: { type: Date },
     submittedPhotos: { type: Number, default: 0 },
-    submittedVideos: { type: Number, default: 0 }, 
-    submittedNotes: { type: String }, 
+    submittedVideos: { type: Number, default: 0 },
+    submittedNotes: { type: String },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("AssignedTask", AssignedTaskSchema);
+module.exports = mongoose.model(
+  "SortingAssignedTask",
+  SortingAssignedTaskSchema
+);

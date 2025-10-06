@@ -31,6 +31,7 @@ router.get("/vendor-payments", vendorCtrl.getVendorPaymentsByStatus);
 router.get("/category/:category", vendorCtrl.getVendorsByCategory);
 
 
+router.get("/specialization/:name", vendorCtrl.getVendorsbySpecilazition);
 
 // routes/vendorPay.js
 router.put("/pay-vendor/:vendorId", vendorCtrl.payVendor);
