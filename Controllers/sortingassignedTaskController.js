@@ -587,6 +587,83 @@ exports.getTaskByServiceUnit = async (req, res) => {
   }
 };
 
+// exports.getSortedTaskByQuotation = async (req, res) => {
+//   try {
+//     const { quotationId } = req.params;
+
+//     if (!quotationId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Quotation ID is required",
+//       });
+//     }
+
+//     // Fetch tasks by quotationId where status is Completed
+//     const tasks = await AssignedTask.find({
+//       quotationId,
+//       status: "Completed",
+//     })
+//       .populate({
+//         path: "quotationId",
+//         select: `
+//           quoteTitle 
+//           quoteNote 
+//           totalAmount 
+//           bookingStatus 
+//           albums
+         
+//         `,
+//       })
+//       .populate({
+//         path:"collectedDataId",
+//         select:`
+//         personName
+//         serviceUnits.packageName
+//         serviceUnits.serviceName
+//         serviceUnits.sortingStatus
+//         serviceUnits.noOfPhotos
+//         serviceUnits.noOfVideos
+//         `
+//       })
+//       .lean();
+
+//     if (!tasks.length) {
+//       return res.json({
+//         success: true,
+//         message: "No completed tasks found",
+//         totalSortedPhotos: 0,
+//         totalSortedVideos: 0,
+//         data: [],
+//       });
+//     }
+
+//     // Calculate totals
+//     const totalSortedPhotos = tasks.reduce(
+//       (sum, t) => sum + (t.submittedPhotos || 0),
+//       0
+//     );
+//     const totalSortedVideos = tasks.reduce(
+//       (sum, t) => sum + (t.submittedVideos || 0),
+//       0
+//     );
+
+//     res.json({
+//       success: true,
+//       totalSortedPhotos,
+//       totalSortedVideos,
+//       data: tasks,
+//     });
+//   } catch (err) {
+//     console.error("Error fetching completed tasks:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: err.message,
+//     });
+//   }
+// };
+
+
 exports.getSortedTaskByQuotation = async (req, res) => {
   try {
     const { quotationId } = req.params;
@@ -606,17 +683,24 @@ exports.getSortedTaskByQuotation = async (req, res) => {
       .populate({
         path: "quotationId",
         select: `
-          quoteTitle 
+     
+          quotationId
           quoteNote 
           totalAmount 
           bookingStatus 
           albums
-          packages.categoryName 
-          packages.eventStartDate 
-          packages.eventEndDate 
-          packages.slot 
-          packages.venueName
         `,
+      })
+      .populate({
+        path: "collectedDataId",
+        select: `
+          personName
+          serviceUnits.packageName
+          serviceUnits.serviceName
+          serviceUnits.sortingStatus
+          serviceUnits.noOfPhotos
+          serviceUnits.noOfVideos
+        `
       })
       .lean();
 
@@ -640,11 +724,23 @@ exports.getSortedTaskByQuotation = async (req, res) => {
       0
     );
 
+    // Extract common data (same for all tasks)
+    const commonQuotationData = tasks[0]?.quotationId || null;
+    const commonCollectedData = tasks[0]?.collectedDataId || null;
+
+    // Remove duplicated data from individual tasks
+    const cleanedTasks = tasks.map(task => {
+      const { quotationId: taskQuotation, collectedDataId: taskCollected, ...taskData } = task;
+      return taskData;
+    });
+
     res.json({
       success: true,
       totalSortedPhotos,
       totalSortedVideos,
-      data: tasks,
+      quotation: commonQuotationData, // Moved outside data array
+      collectedData: commonCollectedData, // Moved outside data array
+      data: cleanedTasks, // Only task-specific data
     });
   } catch (err) {
     console.error("Error fetching completed tasks:", err);
@@ -655,4 +751,3 @@ exports.getSortedTaskByQuotation = async (req, res) => {
     });
   }
 };
-
