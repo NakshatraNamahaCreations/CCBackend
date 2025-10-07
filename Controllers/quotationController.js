@@ -671,9 +671,9 @@ exports.deleteQuotation = async (req, res) => {
 // }
 
 // // Checks if two date ranges overlap
-// function hasOverlap(start1, end1, start2, end2) {
-//   return new Date(start1) <= new Date(end2) && new Date(end1) >= new Date(start2);
-// }
+function hasOverlap(start1, end1, start2, end2) {
+  return new Date(start1) <= new Date(end2) && new Date(end1) >= new Date(start2);
+}
 
 // // ---------------- Vendor Assignment ----------------
 
@@ -873,6 +873,13 @@ exports.deleteQuotation = async (req, res) => {
 // };
 
 // Ensures assignedVendors/Assistants array has enough slots
+
+ // Checks if two date ranges overlap
+function hasOverlap(start1, end1, start2, end2) {
+  return new Date(start1) <= new Date(end2) && new Date(end1) >= new Date(start2);
+}
+
+
 function ensureCapacity(arr, len) {
   if (!Array.isArray(arr)) arr = [];
   while (arr.length < len) arr.push(null);

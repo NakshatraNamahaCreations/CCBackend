@@ -26,6 +26,7 @@ const followUpRoutes = require("./routes/followUpRoutes");
 const vendorInventoryRoutes = require("./routes/vendorInventoryRoutes");
 const vendorPaymentsRoutes = require("./routes/vendorPaymentsRoutes");
 const otherExpenseRoutes = require("./routes/otherExpenseRoutes");
+const editingTaskRoutes = require("./routes/editingTaskRoutes");
 
 dotenv.config();
 const app = express();
@@ -101,6 +102,8 @@ app.use("/api/admin", accountRoutes);
 app.use("/api/lead", leadRoutes);
 app.use("/api/collected-data", collectedDataRoutes);
 app.use("/api/sorting-task", sortingassignedTaskRoutes);
+app.use("/api/editing-tasks", editingTaskRoutes);
+
 // app.use('/api/task-submission', vendorSubmissionRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/daily-tasks", dailyTaskRoutes);

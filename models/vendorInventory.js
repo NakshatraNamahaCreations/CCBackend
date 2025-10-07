@@ -17,6 +17,7 @@
 
 
 // models/VendorInventory.js
+
 const mongoose = require("mongoose");
 
 const vendorInventorySchema = new mongoose.Schema(

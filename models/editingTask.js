@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const SortingAssignedTaskSchema = new mongoose.Schema(
+const EditingTaskSchema = new mongoose.Schema(
   {
     quotationId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -14,8 +14,8 @@ const SortingAssignedTaskSchema = new mongoose.Schema(
     },
     serviceUnitId: { type: mongoose.Schema.Types.ObjectId, required: true },
     packageId: { type: mongoose.Schema.Types.ObjectId, required: true },
-    packageName:{ type: String, required:true},
-    serviceName:{ type: String, required:true},
+    packageName: { type: String, required: true },
+    serviceName: { type: String, required: true },
     vendorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vendor",
@@ -39,14 +39,9 @@ const SortingAssignedTaskSchema = new mongoose.Schema(
 
     // ✅ NEW: Vendor submission tracking
     submittedDate: { type: Date },
-    submittedPhotos: { type: Number, default: 0 },
-    submittedVideos: { type: Number, default: 0 },
     submittedNotes: { type: String },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model(
-  "SortingAssignedTask",
-  SortingAssignedTaskSchema
-);
+module.exports = mongoose.model("EditingTask", EditingTaskSchema);

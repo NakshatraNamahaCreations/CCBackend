@@ -368,7 +368,9 @@ exports.assignTask = async (req, res) => {
       serviceUnitId,
       vendorId,
       vendorName,
-      // taskType,
+      packageId,
+      packageName,
+      serviceName,
       taskDescription,
       noOfPhotos,
       noOfVideos,
@@ -381,7 +383,9 @@ exports.assignTask = async (req, res) => {
       serviceUnitId,
       vendorId,
       vendorName,
-      // taskType,
+      packageId,
+      packageName,
+      serviceName,
       taskDescription,
       noOfPhotos,
       noOfVideos,
@@ -606,12 +610,12 @@ exports.getTaskByServiceUnit = async (req, res) => {
 //       .populate({
 //         path: "quotationId",
 //         select: `
-//           quoteTitle 
-//           quoteNote 
-//           totalAmount 
-//           bookingStatus 
+//           quoteTitle
+//           quoteNote
+//           totalAmount
+//           bookingStatus
 //           albums
-         
+
 //         `,
 //       })
 //       .populate({
@@ -663,7 +667,6 @@ exports.getTaskByServiceUnit = async (req, res) => {
 //   }
 // };
 
-
 exports.getSortedTaskByQuotation = async (req, res) => {
   try {
     const { quotationId } = req.params;
@@ -683,7 +686,6 @@ exports.getSortedTaskByQuotation = async (req, res) => {
       .populate({
         path: "quotationId",
         select: `
-     
           quotationId
           quoteNote 
           totalAmount 
@@ -700,7 +702,7 @@ exports.getSortedTaskByQuotation = async (req, res) => {
           serviceUnits.sortingStatus
           serviceUnits.noOfPhotos
           serviceUnits.noOfVideos
-        `
+        `,
       })
       .lean();
 
@@ -729,8 +731,12 @@ exports.getSortedTaskByQuotation = async (req, res) => {
     const commonCollectedData = tasks[0]?.collectedDataId || null;
 
     // Remove duplicated data from individual tasks
-    const cleanedTasks = tasks.map(task => {
-      const { quotationId: taskQuotation, collectedDataId: taskCollected, ...taskData } = task;
+    const cleanedTasks = tasks.map((task) => {
+      const {
+        quotationId: taskQuotation,
+        collectedDataId: taskCollected,
+        ...taskData
+      } = task;
       return taskData;
     });
 
