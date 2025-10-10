@@ -1,4 +1,4 @@
-const VideoEditingTask = require("../models/VideoEditingTask");
+const VideoEditingTask = require("../models/videoEditingTask");
 
 // 🎥 Assign Video Editing Task
 exports.assignVideoEditingTask = async (req, res) => {
