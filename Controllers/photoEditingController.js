@@ -1,4 +1,8 @@
-const PhotoEditingTask = require("../models/PhotoEditingTask");
+// ✅ if your file is src/models/photoEditingTask.js
+const PhotoEditingTask = require("../models/photoEditingTask");
+
+// ✅ if your file is src/models/quotation.model.js
+const Quotation = require("../models/quotation.model");
 
 // 📸 Assign Photo Editing Task
 exports.assignPhotoEditingTask = async (req, res) => {
