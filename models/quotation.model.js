@@ -1,4 +1,3 @@
-
 // models/Quotation.js
 const mongoose = require("mongoose");
 
@@ -74,6 +73,19 @@ const AlbumSchema = new mongoose.Schema(
 
     notes: String,
     type: String,
+    status: {
+      type: String,
+      enum: [
+        "Awaiting Customer Selection",
+        "Photos To Be Selected By Us",
+        "Selection Ready",
+        "In Progress",
+        "Awaiting Printing Approval",
+        "Sent for Printing",
+        "Completed",
+      ],
+      default: "Awaiting Customer Selection",
+    },
   },
   { _id: true, timestamps: true }
 );
@@ -139,9 +151,13 @@ const AssignedVendorSchema = new mongoose.Schema(
     vendorName: String,
     category: String,
     salary: Number,
-    paymentStatus: { type: String, enum: ["Completed", "Pending"], default: "Pending" },
-    paymentDate: { type: Date},
-    paymentMode: { type: String},
+    paymentStatus: {
+      type: String,
+      enum: ["Completed", "Pending"],
+      default: "Pending",
+    },
+    paymentDate: { type: Date },
+    paymentMode: { type: String },
   },
   { _id: false }
 );
@@ -151,7 +167,6 @@ const AssignedAssistantSchema = new mongoose.Schema(
     assistantId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
     assistantName: String,
     category: String,
-
   },
   { _id: false }
 );
@@ -243,7 +258,7 @@ const QuotationSchema = new mongoose.Schema(
       required: true,
     },
     quotationId: { type: String, required: true, unique: true },
-  
+
     quoteTitle: String,
     quoteDescription: String,
     invoiceNumber: { type: String, unique: true, sparse: true },
@@ -306,16 +321,16 @@ QuotationSchema.statics.getYearlyClientPayments = async function () {
     { $unwind: "$installments" },
     {
       $addFields: {
-        installmentYear: { $year: "$createdAt" } // use createdAt year of Quotation
-      }
+        installmentYear: { $year: "$createdAt" }, // use createdAt year of Quotation
+      },
     },
     {
       $group: {
         _id: "$installmentYear",
-        totalReceived: { $sum: "$installments.paidAmount" }
-      }
+        totalReceived: { $sum: "$installments.paidAmount" },
+      },
     },
-    { $sort: { _id: 1 } }
+    { $sort: { _id: 1 } },
   ]);
 };
 
@@ -327,29 +342,33 @@ QuotationSchema.statics.getYearlyVendorPayments = async function () {
     { $unwind: "$packages.services.assignedVendors" },
     {
       $match: {
-        "packages.services.assignedVendors.paymentStatus": "Completed" // ✅ Only completed
-      }
+        "packages.services.assignedVendors.paymentStatus": "Completed", // ✅ Only completed
+      },
     },
     {
       $addFields: {
         vendorPaymentYear: {
           $cond: [
-            { $ifNull: ["$packages.services.assignedVendors.paymentDate", false] },
+            {
+              $ifNull: [
+                "$packages.services.assignedVendors.paymentDate",
+                false,
+              ],
+            },
             { $year: "$packages.services.assignedVendors.paymentDate" },
-            { $year: "$createdAt" }
-          ]
-        }
-      }
+            { $year: "$createdAt" },
+          ],
+        },
+      },
     },
     {
       $group: {
         _id: "$vendorPaymentYear",
-        totalPaid: { $sum: "$packages.services.assignedVendors.salary" }
-      }
+        totalPaid: { $sum: "$packages.services.assignedVendors.salary" },
+      },
     },
-    { $sort: { _id: 1 } }
+    { $sort: { _id: 1 } },
   ]);
 };
-
 
 module.exports = mongoose.model("Quotation", QuotationSchema);

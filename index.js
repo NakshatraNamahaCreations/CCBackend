@@ -26,9 +26,13 @@ const followUpRoutes = require("./routes/followUpRoutes");
 const vendorInventoryRoutes = require("./routes/vendorInventoryRoutes");
 const vendorPaymentsRoutes = require("./routes/vendorPaymentsRoutes");
 const otherExpenseRoutes = require("./routes/otherExpenseRoutes");
-const editingTaskRoutes = require("./routes/editingTaskRoutes");
+// const editingTaskRoutes = require("./routes/editingTaskRoutes");
 const photoEditingRoutes = require("./routes/photoEditingRoutes");
 const videoEditingRoutes = require("./routes/videoEditingRoutes");
+const albumPhotoSelectionTaskRoutes = require("./routes/albumPhotoSelectionTaskRoutes");
+const albumPhotoSelectedRoutes = require("./routes/albumPhotoSelectedRoutes");
+const albumEditingRoutes = require("./routes/albumEditingRoutes");
+
 dotenv.config();
 const app = express();
 
@@ -103,7 +107,7 @@ app.use("/api/admin", accountRoutes);
 app.use("/api/lead", leadRoutes);
 app.use("/api/collected-data", collectedDataRoutes);
 app.use("/api/sorting-task", sortingassignedTaskRoutes);
-app.use("/api/editing-tasks", editingTaskRoutes);
+// app.use("/api/editing-tasks", editingTaskRoutes);
 app.use("/api/photo-editing", photoEditingRoutes);
 app.use("/api/video-editing", videoEditingRoutes);
 // app.use('/api/task-submission', vendorSubmissionRoutes);
@@ -113,6 +117,9 @@ app.use("/api/follow-up", followUpRoutes);
 app.use("/api/vendor-inventory", vendorInventoryRoutes);
 app.use("/api/vendor-payments", vendorPaymentsRoutes);
 app.use("/api/other-expenses", otherExpenseRoutes);
+app.use("/api/album-photoselection-task", albumPhotoSelectionTaskRoutes);
+app.use("/api/album-photo-selected", albumPhotoSelectedRoutes);
+app.use("/api/album-editing", albumEditingRoutes);
 
 app.use((req, res, next) => {
   res.status(404).json({ error: "Route not found" });

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Quotation = require("../models/quotation.model");
+const AlbumEditingTask = require("../models/albumEditingTask");
 
 // POST /api/quotations/:quotationId/albums
 exports.addAlbum = async (req, res) => {
@@ -170,5 +171,116 @@ exports.getAlbumById = async (req, res) => {
   } catch (err) {
     console.error("getAlbumById error:", err);
     return res.status(500).json({ message: "Failed to fetch album" });
+  }
+};
+
+// ✅ Update album status by albumId inside quotation
+exports.updateAlbumStatus = async (req, res) => {
+  try {
+    const { quotationId, albumId } = req.params;
+    const { status } = req.body;
+
+    const VALID = new Set([
+      "Awaiting Customer Selection",
+      "Photos To Be Selected By Us",
+      "Selection Ready",
+      "In Progress",
+      "Awaiting Printing Approval",
+      "Sent for Printing",
+      "Completed",
+    ]);
+
+    if (!status || !VALID.has(status)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid or missing status value." });
+    }
+
+    // Build filter for quotation (supports ObjectId or external string id like QN0009)
+    const isObjectId = mongoose.Types.ObjectId.isValid(quotationId);
+    const qFilter = isObjectId ? { _id: quotationId } : { quotationId };
+
+    // Only fetch _id for speed
+    const qIdDoc = await Quotation.findOne(qFilter).select("_id").lean();
+    if (!qIdDoc) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found." });
+    }
+    const qId = qIdDoc._id;
+
+    // Special rule: if moving to Awaiting Printing Approval, ensure editing task exists and complete it if still Assigned
+    if (status === "Awaiting Printing Approval") {
+      // 1) Try to complete the latest Assigned task in one go
+      const completedTask = await AlbumEditingTask.findOneAndUpdate(
+        { quotationId: qId, albumId, status: "Assigned" },
+        { $set: { status: "Submitted" } },
+        { new: true, sort: { createdAt: -1 } }
+      ).lean();
+
+      if (!completedTask) {
+        // 2) If we didn't find an Assigned task, check if any task exists at all
+        const existsAny = await AlbumEditingTask.exists({
+          quotationId: qId,
+          albumId,
+        });
+        if (!existsAny) {
+          return res.status(400).json({
+            success: false,
+            message: "Editing task is not assigned yet.", // ⬅️ If you meant printing task, adjust text
+          });
+        }
+        // If tasks exist but none are Assigned (e.g., already Completed), we proceed.
+      }
+
+      // 3) Update album status positional without loading doc
+      const upd = await Quotation.updateOne(
+        { _id: qId, "albums._id": albumId },
+        { $set: { "albums.$.status": "Awaiting Printing Approval" } }
+      );
+
+      if (!upd || upd.modifiedCount !== 1) {
+        return res.status(404).json({
+          success: false,
+          message: "Album not found in this quotation or status unchanged.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Album status updated to "Awaiting Printing Approval".`,
+        data: {
+          quotationId: qId,
+          albumId,
+          newStatus: "Awaiting Printing Approval",
+        },
+      });
+    }
+
+    // Fast path for all other statuses: single positional update
+    const upd = await Quotation.updateOne(
+      { _id: qId, "albums._id": albumId },
+      { $set: { "albums.$.status": status } }
+    );
+
+    if (!upd || upd.modifiedCount !== 1) {
+      return res.status(404).json({
+        success: false,
+        message: "Album not found in this quotation or status unchanged.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Album status updated to "${status}".`,
+      data: { quotationId: qId, albumId, newStatus: status },
+    });
+  } catch (error) {
+    console.error("updateAlbumStatus error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update album status.",
+      error: error.message,
+    });
   }
 };
